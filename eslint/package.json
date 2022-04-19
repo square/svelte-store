@@ -1,0 +1,5 @@
+{
+  "name": "eslint-plugin-square-svelte-store",
+  "version": "1.0.0",
+  "main": "index.js"
+}
