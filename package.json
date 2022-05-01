@@ -47,5 +47,6 @@
     "svelte": "^3.0.0"
   },
   "license": "ISC",
-  "author": "Square"
+  "author": "Square",
+  "type": "module"
 }
