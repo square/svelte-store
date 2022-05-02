@@ -5,7 +5,9 @@
     "outDir": "./lib",
     "paths": {
       "@protos/*": ["./protos/*"]
-    }
+    },
+    "sourceMap": true,
+    "inlineSources": true,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
