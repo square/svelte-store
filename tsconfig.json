@@ -1,15 +1,11 @@
 {
   "compilerOptions": {
-    "types": ["node", "svelte", "jest"],
+    "types": ["node", "jest"],
     "declaration": true,
     "outDir": "./lib",
-    "paths": {
-      "@protos/*": ["./protos/*"]
-    },
     "sourceMap": true,
     "inlineSources": true,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
-  "extends": "@tsconfig/svelte/tsconfig.json",
 }

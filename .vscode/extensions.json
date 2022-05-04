@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "svelte.svelte-vscode",
+    "davidanson.vscode-markdownlint",
+    "dbaeumer.vscode-eslint"
+  ]
+}

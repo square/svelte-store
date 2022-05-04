@@ -1,0 +1,17 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": true,
+    "source.fixAll.markdownlint": true
+  },
+  "svelte.plugin.svelte.format.config.singleQuote": true,
+  "[svelte]": {
+    "editor.defaultFormatter": "svelte.svelte-vscode"
+  },
+  "eslint.validate": [
+    "javascript",
+    "svelte",
+    "typescript",
+    "yaml"
+  ]
+}
