@@ -25,7 +25,7 @@ export interface Loadable<T> extends Readable<T> {
 }
 
 export interface WritableLoadable<T> extends Loadable<T> {
-  set(value: T): Promise<void>;
+  set(value: T, persist?: boolean): Promise<void>;
   update(updater: Updater<T>): Promise<void>;
 }
 
@@ -140,7 +140,8 @@ export const asyncWritable = <S extends Stores, T>(
   mappingLoadFunction: (values: StoresValues<S>) => Promise<T> | T,
   mappingWriteFunction?: (
     value: T,
-    parentValues?: StoresValues<S>
+    parentValues?: StoresValues<S>,
+    oldValue?: T
   ) => Promise<void | T>,
   reloadable?: boolean,
   initial: T = undefined
@@ -200,21 +201,29 @@ export const asyncWritable = <S extends Stores, T>(
     return currentLoadPromise;
   };
 
-  const setStoreValueThenWrite = async (value: T) => {
+  const setStoreValueThenWrite = async (
+    updater: Updater<T>,
+    persist?: boolean
+  ) => {
+    let oldValue;
     try {
-      await loadDependenciesThenSet(loadAll);
-      currentLoadPromise = currentLoadPromise.then(() => value);
+      oldValue = await loadDependenciesThenSet(loadAll);
     } catch {
-      currentLoadPromise = currentLoadPromise.catch(() => value);
+      oldValue = get(thisStore);
     }
-    thisStore.set(value);
+    const newValue = updater(oldValue);
+    currentLoadPromise = currentLoadPromise
+      .then(() => newValue)
+      .catch(() => newValue);
+    thisStore.set(newValue);
 
-    if (mappingWriteFunction) {
+    if (mappingWriteFunction && persist) {
       const parentValues = await loadAll(stores);
 
       const writeResponse = (await mappingWriteFunction(
-        value,
-        parentValues
+        newValue,
+        parentValues,
+        oldValue
       )) as T;
 
       if (writeResponse !== undefined) {
@@ -224,17 +233,17 @@ export const asyncWritable = <S extends Stores, T>(
     }
   };
 
-  const updateStoreValueThenWrite = async (updater: Updater<T>) => {
-    const currentValue = await loadDependenciesThenSet(loadAll);
-    return setStoreValueThenWrite(updater(currentValue));
-  };
+  const set = (newValue: T, persist = true) =>
+    setStoreValueThenWrite(() => newValue, persist);
+  const update = (updater: Updater<T>, persist = true) =>
+    setStoreValueThenWrite(updater, persist);
 
   const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
 
   return {
     subscribe: thisStore.subscribe,
-    set: setStoreValueThenWrite,
-    update: updateStoreValueThenWrite,
+    set,
+    update,
     load: () => loadDependenciesThenSet(loadAll),
     ...(hasReloadFunction && {
       reload: () => loadDependenciesThenSet(reloadAll, reloadable),
