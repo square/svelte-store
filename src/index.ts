@@ -22,7 +22,6 @@ export type {
 export interface Loadable<T> extends Readable<T> {
   load?(): Promise<T>;
   reload?(): Promise<T>;
-  isLoading: boolean;
 }
 
 export interface WritableLoadable<T> extends Loadable<T> {
@@ -148,7 +147,7 @@ export const asyncWritable = <S extends Stores, T>(
 ): WritableLoadable<T> => {
   let loadedValuesString: string;
   let currentLoadPromise: Promise<T>;
-  let isLoading = true;
+
   // eslint-disable-next-line prefer-const
   let loadDependenciesThenSet: (
     parentLoadFunction: (stores: S) => Promise<StoresValues<S>>,
@@ -190,13 +189,11 @@ export const asyncWritable = <S extends Stores, T>(
       loadedValuesString = newValuesString;
     }
 
-    isLoading = true;
     // if mappingLoadFunction takes in single store rather than array, give it first value
     currentLoadPromise = Promise.resolve(
       mappingLoadFunction(Array.isArray(stores) ? storeValues : storeValues[0])
     ).then((finalValue) => {
       thisStore.set(finalValue);
-      isLoading = false;
       return finalValue;
     });
 
@@ -242,7 +239,6 @@ export const asyncWritable = <S extends Stores, T>(
     ...(hasReloadFunction && {
       reload: () => loadDependenciesThenSet(reloadAll, reloadable),
     }),
-    isLoading,
   };
 };
 
@@ -277,7 +273,6 @@ export const asyncDerived = <S extends Stores, T>(
     subscribe: thisStore.subscribe,
     load: thisStore.load,
     ...(thisStore.reload && { reload: thisStore.reload }),
-    isLoading: thisStore.isLoading,
   };
 };
 
