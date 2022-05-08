@@ -156,6 +156,18 @@ const shortcuts = asyncWritable(
 
 In this example we derive from an authToken store and include it in both our GET and POST requests.
 
+Some niche features of asyncWritable stores allow for more specific error handling of write functions. The write function we provide as the third argument can be written to accept a third argument that receives the value of the store before it was set. This allows for resetting the value of the store in the case of a write failure by catching the error and returning the old value. A similar feature is that both the `set` and `update` functions can take a second argument that indicates whether the async write functionality should be called during the set process.
+
+For example...
+
+```
+try {
+  await myAsyncStore.set('set state');
+} catch {
+  await myAsyncStore.set('laoded state');
+}
+```
+
 ## Additional functions
 
 ### isLoadable and isReloadable
