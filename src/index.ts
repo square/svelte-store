@@ -17,11 +17,22 @@ export type {
   Writable,
 } from 'svelte/store';
 
+// TESTING MODE
+
+let testingMode = false;
+
+export const getStoreTestingMode = (): boolean => testingMode;
+
+export const enableStoreTestingMode = (): void => {
+  testingMode = true;
+};
+
 // TYPES
 
 export interface Loadable<T> extends Readable<T> {
   load?(): Promise<T>;
   reload?(): Promise<T>;
+  flagForReload?(): void;
 }
 
 export interface WritableLoadable<T> extends Loadable<T> {
@@ -147,11 +158,12 @@ export const asyncWritable = <S extends Stores, T>(
 ): WritableLoadable<T> => {
   let loadedValuesString: string;
   let currentLoadPromise: Promise<T>;
+  let forceReload = false;
 
   // eslint-disable-next-line prefer-const
   let loadDependenciesThenSet: (
     parentLoadFunction: (stores: S) => Promise<StoresValues<S>>,
-    forceReload?: boolean
+    alwaysReload?: boolean
   ) => Promise<T>;
 
   const thisStore = writable(initial, () => {
@@ -165,7 +177,7 @@ export const asyncWritable = <S extends Stores, T>(
 
   loadDependenciesThenSet = async (
     parentLoadFunction: (stores: S) => Promise<StoresValues<S>>,
-    forceReload = false
+    alwaysReload = false
   ) => {
     const loadParentStores = parentLoadFunction(stores);
 
@@ -180,13 +192,23 @@ export const asyncWritable = <S extends Stores, T>(
       get(store)
     ) as StoresValues<S>;
 
-    if (!forceReload) {
+    // ignore force reload when initially subscribing to store
+    if (forceReload && loadedValuesString === undefined) {
+      forceReload = false;
+    }
+
+    if (!alwaysReload) {
       const newValuesString = JSON.stringify(storeValues);
-      if (newValuesString === loadedValuesString) {
+      if (newValuesString === loadedValuesString && !forceReload) {
         // no change, don't generate new promise
         return currentLoadPromise;
       }
       loadedValuesString = newValuesString;
+    }
+
+    if (forceReload) {
+      thisStore.set(initial);
+      forceReload = false;
     }
 
     // if mappingLoadFunction takes in single store rather than array, give it first value
@@ -239,6 +261,11 @@ export const asyncWritable = <S extends Stores, T>(
     ...(hasReloadFunction && {
       reload: () => loadDependenciesThenSet(reloadAll, reloadable),
     }),
+    ...(testingMode && {
+      flagForReload: () => {
+        forceReload = true;
+      },
+    }),
   };
 };
 
@@ -273,6 +300,7 @@ export const asyncDerived = <S extends Stores, T>(
     subscribe: thisStore.subscribe,
     load: thisStore.load,
     ...(thisStore.reload && { reload: thisStore.reload }),
+    ...(thisStore.flagForReload && { flagForReload: thisStore.flagForReload }),
   };
 };
 

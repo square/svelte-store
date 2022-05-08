@@ -303,3 +303,7 @@ module.exports = {
   rules: {'square-svelte-store/use-square-svelte-store': 'error'}
 }
 ```
+
+## Testing
+
+Testing mode can be enabled using the `enableStoreTestingMode` function before running your tests. If testing mode is enabled async stores will include an additional function, `flagForReload`. This function can be called in between tests in order to force stores to reload the next time they are `load`ed. This is useful to test different load conditions for your app, such as endpoint failures.
