@@ -82,25 +82,30 @@ describe('asyncWritable', () => {
 
   describe('no parents / asyncReadable', () => {
     it('loads expected value', async () => {
-      const myAsyncDerived = asyncReadable(undefined, () =>
+      const myAsyncReadable = asyncReadable(undefined, () =>
         Promise.resolve('expected')
       );
-      myAsyncDerived.subscribe(jest.fn);
+      myAsyncReadable.subscribe(jest.fn);
 
-      expect(myAsyncDerived.load()).resolves.toBe('expected');
-      await myAsyncDerived.load();
-      expect(get(myAsyncDerived)).toBe('expected');
+      expect(myAsyncReadable.load()).resolves.toBe('expected');
+      await myAsyncReadable.load();
+      expect(get(myAsyncReadable)).toBe('expected');
     });
 
     it('loads initial value when rejected', async () => {
-      const myAsyncDerived = asyncReadable('initial', () =>
+      const myAsyncReadable = asyncReadable('initial', () =>
         Promise.reject(new Error('error'))
       );
-      myAsyncDerived.subscribe(jest.fn);
+      const isInitial = derived(
+        myAsyncReadable,
+        ($myAsyncReadable) => $myAsyncReadable === 'initial'
+      );
+      expect(get(isInitial)).toBe(true);
 
-      expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
-      await myAsyncDerived.load().catch(() => Promise.resolve());
-      expect(get(myAsyncDerived)).toBe('initial');
+      expect(myAsyncReadable.load()).rejects.toStrictEqual(new Error('error'));
+      await myAsyncReadable.load().catch(() => Promise.resolve());
+      expect(get(myAsyncReadable)).toBe('initial');
+      expect(get(isInitial)).toBe(true);
     });
 
     it('does not reload if not reloadable', () => {
@@ -379,6 +384,57 @@ describe('asyncWritable', () => {
       expect(loadedValue).toBe('final');
 
       expect(mappingWriteFunction).toHaveBeenCalledTimes(1);
+    });
+
+    it('provides old value of store to mapping write function', async () => {
+      const dataFetchFunction = jest.fn(() => Promise.reject());
+      const myAsyncWritable = asyncWritable(
+        [],
+        () => Promise.resolve('initial'),
+        async (newValue, parentValues, oldValue) => {
+          try {
+            return await dataFetchFunction();
+          } catch {
+            return oldValue;
+          }
+        }
+      );
+      myAsyncWritable.subscribe(jest.fn);
+
+      expect(myAsyncWritable.load()).resolves.toBe('initial');
+      await myAsyncWritable.load();
+      expect(get(myAsyncWritable)).toBe('initial');
+
+      await myAsyncWritable.set('final').catch(() => Promise.resolve());
+      expect(get(myAsyncWritable)).toBe('initial');
+      const loadedValue = await myAsyncWritable.load();
+      expect(loadedValue).toBe('initial');
+
+      expect(dataFetchFunction).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows writing without invoking mappingWriteFunction', async () => {
+      const dataFetchFunction = jest.fn(() => Promise.reject());
+      const myAsyncWritable = asyncWritable(
+        [],
+        () => Promise.resolve('initial'),
+        dataFetchFunction
+      );
+      myAsyncWritable.subscribe(jest.fn);
+
+      expect(myAsyncWritable.load()).resolves.toBe('initial');
+      await myAsyncWritable.load();
+      expect(get(myAsyncWritable)).toBe('initial');
+
+      try {
+        await myAsyncWritable.set('final');
+      } catch {
+        // no idea why this needs to be caught
+        await myAsyncWritable.set('error', false);
+      }
+      expect(get(myAsyncWritable)).toBe('error');
+
+      expect(dataFetchFunction).toHaveBeenCalledTimes(1);
     });
 
     it('updates to expected value', async () => {
