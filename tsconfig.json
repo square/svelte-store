@@ -5,6 +5,9 @@
     "outDir": "./lib",
     "sourceMap": true,
     "inlineSources": true,
+    "target": "ES6",
+    "moduleResolution": "node",
+    "module": "es2022"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
