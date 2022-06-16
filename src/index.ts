@@ -126,6 +126,22 @@ export const reloadAll = <S extends Stores>(
   return Promise.all(reloadPromises) as Promise<StoresValues<S>>;
 };
 
+/**
+ * Load a number of stores, and catch any errors.
+ * @param stores Any Readable or array of Readables to await loading of.
+ * @returns boolean representing whether the given stores loaded without errors, or not.
+ */
+export const safeLoad = async <S extends Stores>(
+  stores: S
+): Promise<boolean> => {
+  try {
+    await loadAll(stores);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 // STORES
 
 /**
