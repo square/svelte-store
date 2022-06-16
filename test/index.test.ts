@@ -10,6 +10,7 @@ import {
   loadAll,
   readable,
   reloadAll,
+  safeLoad,
   writable,
 } from '../src/index';
 
@@ -58,6 +59,16 @@ describe('loadAll / reloadAll utils', () => {
       expect(reloadAll([myLoadable, badLoadable])).rejects.toStrictEqual(
         new Error('F')
       );
+    });
+  });
+
+  describe('safeLoad function', () => {
+    it('resolves to true with good store', () => {
+      expect(safeLoad(myLoadable)).resolves.toBe(true);
+    });
+
+    it('resolves to false with bad store', () => {
+      expect(safeLoad(badLoadable)).resolves.toBe(false);
     });
   });
 });

@@ -178,11 +178,25 @@ The isLoadable and isReloadable functions let you check if a store is Loadable o
 
 The loadAll function can take in an array of stores and returns a promise that will resolve when any loadable stores provided finish loading. This is useful if you have a component that uses multiple stores and want to delay rendering until those stores have populated.
 
+### safeLoad
+
+The safeLoad function works similarly to loadAll, however any loading errors of the given stores will be caught, and a boolean returned representing whether loading all of the provided stores was performed successfully or not. This can be useful when you wish to handle possible loading errors, yet still want to render content upon failure.
+
+```javascript
+{#await safeLoad(myStore) then loadedSuccessfully}
+  {#if !loadedSuccessfully}
+    <ErrorBanner/>
+  {/if}
+  <ComponentContent/>
+{/await}
+```
+
 ## Putting it all Together
 
 The usefulness of async stores becomes more obvious when dealing with complex relationships between different pieces of async data.
 
-Let's consider a contrived example. We are developing a social media website that lets users share and view blogs. In a sidebar we have a list of shortcuts to the users favorite blogs with along with a blurb from their most recent post. We would like to test a feature with 5% of users where we also provide a few suggested blogs alongside their favorites. As the user views new blogs, their suggested list of blogs also updates based on their indicated interests. To support this we have a number of endpoints.
+Let's consider an example scenario that will put our @square/svelte-stores to work.
+We are developing a social media website that lets users share and view blogs. In a sidebar we have a list of shortcuts to the users favorite blogs with along with a blurb from their most recent post. We would like to test a feature with 5% of users where we also provide a few suggested blogs alongside their favorites. As the user views new blogs, their suggested list of blogs also updates based on their indicated interests. To support this we have a number of endpoints.
 
 - A `personalization` endpoint provides a list of the user's favorite and suggested blogs.
 - A `preview` endpoint lets us fetch a blurb for the most recent post of a given blog.
@@ -194,115 +208,7 @@ We've got some challenges here. We need the user's ID before we take any other s
 
 Without async stores this could get messy! However by approaching this using stores all we need to worry about is one piece of data at a time, and the pieces we need to get it.
 
-*Let's look at the implementation...*
-
-```javascript
-const userToken = asyncReadable(undefined, async () => {
-  const userData = await getUserData();
-  return userData.token;
-});
-
-const showSuggestions = asyncDerived(userToken, async ($userToken) => {
-  const testFlags = await getTestParticipation($userToken);
-  return testFlags['SHOW_SUGGESTIONS'];
-});
-
-
-// We declare userPersonalization to be reloadable so that we can fetch
-// new suggestions.
-const userPersonalization = asyncDerived(
-  userToken,
-  async ($userToken) => {
-    return await getPersonalization($userToken);
-  },
-  true
-);
-
-// Note that this store's GET function is not async, while its SET is.
-// asyncWritables only require an async function for its setting.
-// We derive from the userPersonalization store to GET data, but from
-// userToken to SET data. We use a `_` to indicate values that are unused.
-const favoriteBlogs = asyncWritable(
-  [userPersonalization, userToken],
-  ([$userPersonalization, _]) => $userPersonalization.favorites,
-  async (newFavorites, [_, $userToken]) => {
-    const savedFavorites = await setFavorites(newFavorites, $userToken);
-  },
-  true
-);
-
-const suggestedBlogs = derived(
-  userPersonalization,
-  ($userPersonalization) => $userPersonalization.suggested
-);
-
-export const blogShortcuts = derived(
-  [favoriteBlogs, suggestedBlogs, showSuggestions],
-  ([$favoriteBlogs, $suggestedBlogs, $showSuggestions]) => {
-    const shortcuts = $favoriteBlogs;
-    if ($showSuggestions) {
-      shortcuts.concat($suggestedBlogs);
-    }
-    return shortcuts;
-  }
-);
-
-// Here we generate promises to load previews for each of the blogShortcuts.
-// We await all of these promises and use them to populate a map for the blog id
-// to the relevant preview.
-export const blogPreviews = asyncDerived(
-  blogShortcuts,
-  async ($blogShortcuts) => {
-    const blogPreviewsById = {};
-    const loadPreviewPromises = $blogShortcuts.map(blogShortcut, async () => {
-      const preview = await getPreview(blogShortcut.id);
-      blogPreviewsById[blogShortcut.id] = preview;
-    });
-    await Promise.all(loadPreviewPromises);
-    return blogPreviewsById;
-  }
-);
-```
-
-```html
-// ShortcutsSidebar.svelte
-<script>
-  import { onMount } from 'svelte';
-  import { blogShortcuts, blogPreviews, favoriteBlogs } from 'ourstores';
-
-  onMount(() => {
-    const onSuggestionsUpdate = () => { blogShortcuts.reload() };
-    window.addEventListener('SUGGESTIONS_UPDATE', onSuggestionsUpdate);
-    return () => window.removeEventListener('SUGGESTIONS_UPDATE', onSuggestionsUpdate);
-  })
-
-  const removeShortcut = (blogIdToRemove) => {
-    favoriteBlogs.set($favoriteBlogs.filter( (blog) => blog.id !== blogIdToRemove ));
-  }
-</script>
-```
-
-```svelte
-
-{#await blogShortcuts.load()}
-  <LoadingSpinner/>
-{:then}
-  {#each $blogShortcuts as blog}
-    <BlogShortcut model={blog} on:remove={removeShortcut}>
-      {$blogPreviews[blog.id] || ''}
-    </BlogShortcut>
-  {/each}
-{/await}
-
-```
-
-In our component we await blogShortcuts loading. The act of subscribing to blogShortcuts kicks off the loading of blogShortcuts' parents, and the parents' parents in turn. As a result awaiting blogShortcuts loading waits for all of the dependencies without us having to account for them beyond writing our stores.
-
-During mounting of our component we create an event listener that will trigger upon a `SUGGESTIONS_UPDATE` event that could be triggered as our user performs actions that provide signal for blog suggestions. When this happens we call `blogShortcuts.reload()`. Note that we did not specify that blogShortcuts is Reloadable. However since it ultimately derives from the Reloadable userPersonalization store, blogShortcuts will have access to the reload function to reload any appropriate ancestors. In this case it will mean that userPersonalization will reload, while userToken and showSuggestions will not. Any changes to userPersonalization will propagate down the chain of derived stores, and when it reaches blogPreviews it will fetch blurbs for the new set of blogs. The updated list of blogs will render immediately while the blurbs for any new blogs will load lazily.
-
-If a user dismisses one of their favorites we will `set` favoriteBlogs. This means we will immediately update the favoriteBlogs store, and thus blogShortcuts, as a derived store, will update as well. This means we can give our user instant feedback for their dismiss action. After the store updates the SET function we provided in defining favoriteBlogs will execute, saving the new list of favorites to our backend. Since we did not return a value in that SET function the value of the store will not update when this async behavior completes. If we wish to fetch new canonical data for favoriteBlogs after setting we can now call reload on the store. As before this will reload the store's Reloadable ancestor--userPersonalization. This means if there are any changes to a user's suggestions due to their changes in favorites we can reactively update to reflect those changes, and in turn fetch any new blurbs needed.
-
-That's a lot going on! However it is all handled by the contracts we have established between stores. Once you understand the capabilities of each kind of store it becomes easy to break apart complicated order of operation problems simply by tackling things one store at a time. So dive in, and have fun!
+*[Let's look at an interactive implementation...](https://codesandbox.io/s/square-svelte-store-demo-tbvonh?file=/App.svelte)*
 
 ## Extras
 
