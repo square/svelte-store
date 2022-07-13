@@ -22,11 +22,11 @@ const  searchResults = asyncDerived(
 
 ## The Basics
 
-Square Svelte Store is intended as a replacement for importing from `svelte/store`. It includes all of the features of `svelte/store` while also extending the functionality of some stores and adding some new ones.
+Square Svelte Store is intended as a replacement for importing from `svelte/store`. It includes all of the features of `svelte/store` while also adding new stores and extending functionality for compatibility between them.
 
 ### Loadable
 
-The new async stores are a new type: `Loadable`. Loadable stores work the same as regular stores--you can derive from them, subscribe to them, and access their value reactively in a component by using the `$` accessor. But they also include extra functionality: a `load` function is available on every loadable store. This function is asynchronous, and resolves to the value of the store after it has finished its async behavior. This lets you control the display of your app based on the status of async routines while also maintaining reactivity!
+Stores exported by @square/svelte-store are a new type: `Loadable`. Loadable stores work the same as regular stores--you can derive from them, subscribe to them, and access their value reactively in a component by using the `$` accessor. But they also include extra functionality: a `load` function is available on every store. This function is asynchronous, and resolves to the value of the store after it has finished its async behavior. This lets you control the display of your app based on the status of async routines while also maintaining reactivity!
 
 ```javascript
 {#await myLoadableStore.load()}
@@ -36,17 +36,17 @@ The new async stores are a new type: `Loadable`. Loadable stores work the same a
 {/await}
 ```
 
-What's better is that any store that derives from a Loadable store will *also* be Loadable, and awaiting the derived store will automatically await for any asynchronous parents to finish loading. This means that *no matter how complex* the relationships between your async and synchronous data gets you will *always* be able to ensure that a given store has its final value simply by awaiting `.load()`!
+What's better is that any derived store loads all of its parents before loading itself, allowing you to `await`loading of the derived store to automatically wait for all required data dependencies. This means that *no matter how complex* the relationships between your async and synchronous data gets you will *always* be able to ensure that a given store has its final value simply by awaiting `.load()`!
 
 ### Reloadable
 
-While hydrating your app with data, some endpoints you will only need to access once. Others you will need to access multiple times. By default async stores will only load once unless a store they derive from changes. However if you would like an async store to be able to load new data you can declare it to be `Reloadable` during creation. If you do so, the store, and any stores that ultimately derive from it, will have access to a `reload` function. Calling the reload function of a Reloadable store will cause it fetch new data, and calling the reload function of any store that derives from a Reloadable store will cause that Reloadable store to reload. In this manner you can call reload on a store and it will reload any sources of data that should be refreshed without unnecessarily creating promises for data that should not be refreshed.
+While hydrating your app with data, some endpoints you will only need to access once. Others you will need to access multiple times. By default async stores will only load once unless a store they derive from changes. However if you would like an async store to be able to load new data you can declare it to be `reloadable` during creation. If you do so, the store, and any stores that ultimately derive from it, will have access to a `reload` function. Calling the reload function of a Reloadable store will cause it fetch new data, and calling the reload function of any store that derives from a Reloadable store will cause that Reloadable store to reload. In this manner you can call reload on a store and it will reload any sources of data that should be refreshed without unnecessarily creating promises for data that should not be refreshed.
 
 ## The New Stores
 
 ### asyncReadable
 
-An asyncReadable store is a Loadable store that provides easy asynchronous support to readable stores. Like a readable store, an asyncReadable store takes in an initial value and a function that is called when the store is first subscribed to. For an asyncReadable store this function is an async `loadFunction` which takes no arguments and returns the loaded value of the store. An optional third parameter can specify if the store is Reloadable or not (false by default).
+An asyncReadable store provides easy asynchronous support to readable stores. Like a readable store, an asyncReadable store takes in an initial value and a function that is called when the store is first subscribed to. For an asyncReadable store this function is an async `loadFunction` which takes no arguments and returns the loaded value of the store. An optional third parameter can specify if the store is Reloadable or not (false by default).
 
 *asyncReadable stores are super simple! Let's see it in action...*
 
@@ -62,11 +62,11 @@ const userInfo = asyncReadable(
 );
 ```
 
-Now we have a Loadable and Reloadable userInfo store! As soon as our app renders a component that needs data from userInfo it will begin to load. We can `{#await userInfo.load()}` in our components that need userInfo. This will delay rendering until we have the data we need. Since we have provided `true` as a third argument we can call `userInfo.reload()` to pull new data and reactively update once we have it.
+Now we have a Loadable and reloadable userInfo store! As soon as our app renders a component that needs data from userInfo it will begin to load. We can `{#await userInfo.load()}` in our components that need userInfo. This will delay rendering until we have the data we need. Since we have provided `true` as a third argument we can call `userInfo.reload()` to pull new data (and reactively update our components once we have it).
 
 ## derived
 
-Okay this isn't a new store, but it does have some new features! We declare a derived store the same as ever, but if we derive from any Loadable store the derived store will also be Loadable, and the same for Reloadable.
+Okay this isn't a new store, but it does have some new features! We declare a derived store the same as ever, but it now gives us access to a `load` function. This load function resolves after all parents have loaded and the derived store has calculated its final value.
 
 *What does that mean for our app..?*
 
@@ -75,7 +75,9 @@ const userSettings = derived(userInfo, ($userInfo) => $userInfo?.settings);
 const darkMode = derived(userSettings, ($userSetting) => $userSettings?.darkMode);
 ```
 
-Now we've got a darkMode store that tracks whether our user has selected darkMode for our app. When we use this store in a component we can use `darkMode.load()` to await userInfo to finish loading, and we can call `darkMode.reload()` to get new userInfo if we encounter a situation where the user's darkMode setting may have changed. This isn't very impressive with our simple example, but as we build out our app and encounter situations where derived values come fom multiple endpoints through several layers of derivations this becomes much more useful.  Being able to call load and reload on just the data you need is much more convenient than tracking down all of the dependencies involved!
+Now we've got a darkMode store that tracks whether our user has selected darkMode for our app. When we use this store in a component we can call `darkMode.load()`. This awaits userSettings loading, which in turn awaits userInfo. In this way, we can load a derived store to automatically load the sources of its data and to wait for its final value. What's more, since darkMode derives froma reloadable source, we can call `darkMode.reload()` to get new userInfo if we encounter a situation where the user's darkMode setting may have changed.
+
+This isn't very impressive with our simple example, but as we build out our app and encounter situations where derived values come fom multiple endpoints through several layers of derivations this becomes much more useful. Being able to call load and reload on just the data you need is much more convenient than tracking down all of the dependencies involved!
 
 ## asyncDerived
 
@@ -97,7 +99,9 @@ const results = asyncDerived(
 );
 ```
 
-Here we have a store that reflects a paginated set of results from an endpoint. Just like a regular derived store we include a function that maps the values of parent stores to the value of this store. Of course with an async store we use an async function. However, while regular derived stores will invoke that function whenever any of the parent values changes (including initialization) an asyncDerived store will only do so after all of the parents have finished loading. This means you don't need to worry about creating unnecessary or premature network calls. After the stores have finished loading any new changes to the parent stores will create a new network request. In this example if we write to the page store when the user changes pages we will automatically make a new request that will update our results store. Just like with asyncReadable stores we can include a boolean to indicate that an asyncDerived store will be Reloadable.
+Here we have a store that reflects a paginated set of results from an endpoint. Just like a regular derived store we include a function that maps the values of parent stores to the value of this store. Of course with an async store we use an async function. However, while regular derived stores will invoke that function whenever any of the parent values changes (including initialization) an asyncDerived store will only do so after all of the parents have finished loading. This means you don't need to worry about creating unnecessary or premature network calls.
+
+After the stores have finished loading any new changes to the parent stores will create a new network request. In this example if we write to the page store when the user changes pages we will automatically make a new request that will update our results store. Just like with asyncReadable stores we can include a boolean to indicate that an asyncDerived store will be Reloadable.
 
 ## asyncWritable
 
@@ -158,14 +162,40 @@ In this example we derive from an authToken store and include it in both our GET
 
 Some niche features of asyncWritable stores allow for more specific error handling of write functions. The write function we provide as the third argument can be written to accept a third argument that receives the value of the store before it was set. This allows for resetting the value of the store in the case of a write failure by catching the error and returning the old value. A similar feature is that both the `set` and `update` functions can take a second argument that indicates whether the async write functionality should be called during the set process.
 
-For example...
+## readable/writable
 
-```
-try {
-  await myAsyncStore.set('set state');
-} catch {
-  await myAsyncStore.set('laoded state');
-}
+Similarly to derived stores, addtional load functionality is bundled with readable and writable stores. Both readable and writable stores include a `.load()` function that will resolve when the value of the store is first set. If an initial value is provided when creating the store, this means the store will load immeadietly. However, if a value is not provided (left `undefined`) then the store will only load after it is set to a value. This makes it easy to wait on user input, an event listener, etc. in your application.
+
+*It's easy to wait for user input...*
+
+```javascript
+<script>
+  const hasConsent = actionWritable((set) => {
+    const setConsent = set(true);
+    addEventListener('CONSENT_EVENT', setConsent);
+
+    return () => removeEventListener('CONSENT_EVENT', setConsent);  
+  });
+  const needsConsent = asyncDerived(
+    (hasConsent),
+    async ($hasConsent) => {
+      // this won't run until hasConsent has loaded
+      if (!$hasConsent) {
+        return "no consent given"
+      }
+      const asyncMessage = await Promise.resolve('data fetched from server');
+      return asyncMessage;
+    }
+  );
+</script>
+
+<button on:click={() => hasConsent.set(true)>I consent!</button>
+<button on:click={() => hasConsent.set(false)>I don't consent!</button>
+
+{#await needsConsent.load()}
+  <p>I will only load after hasConsent has been populated</p>
+  <p>{$needsConsent}</p>
+{/await}
 ```
 
 ## Additional functions
