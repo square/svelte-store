@@ -7,7 +7,8 @@
     "inlineSources": true,
     "target": "ES6",
     "moduleResolution": "node",
-    "module": "es2022"
+    "module": "es2022",
+    "strict": false,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules/*", "__sapper__/*", "public/*"],

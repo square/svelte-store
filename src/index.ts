@@ -2,12 +2,15 @@ import {
   derived as vanillaDerived,
   get,
   Readable,
+  StartStopNotifier,
+  Subscriber,
   Unsubscriber,
   Updater,
-  writable,
+  Writable,
+  writable as vanillaWritable,
 } from 'svelte/store';
 
-export { get, readable, writable } from 'svelte/store';
+export { get } from 'svelte/store';
 export type {
   Readable,
   Unsubscriber,
@@ -30,15 +33,17 @@ export const enableStoreTestingMode = (): void => {
 // TYPES
 
 export interface Loadable<T> extends Readable<T> {
-  load?(): Promise<T>;
+  load(): Promise<T>;
   reload?(): Promise<T>;
   flagForReload?(): void;
 }
 
-export interface WritableLoadable<T> extends Loadable<T> {
+export interface AsyncWritable<T> extends Writable<T> {
   set(value: T, persist?: boolean): Promise<void>;
   update(updater: Updater<T>): Promise<void>;
 }
+
+export interface WritableLoadable<T> extends AsyncWritable<T>, Loadable<T> {}
 
 /* These types come from Svelte but are not exported, so copying them here */
 /* One or more `Readable`s. */
@@ -183,7 +188,7 @@ export const asyncWritable = <S extends Stores, T>(
     alwaysReload?: boolean
   ) => Promise<T>;
 
-  const thisStore = writable(initial, () => {
+  const thisStore = vanillaWritable(initial, () => {
     loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
     getStoresArray(stores).map((store) =>
       store.subscribe(() => {
@@ -389,15 +394,76 @@ export function derived<S extends Stores, T>(
   stores: S,
   fn: DerivedMapper<S, T> | SubscribeMapper<S, T>,
   initialValue?: T
-): Readable<T> {
+): Loadable<T> {
   const thisStore = vanillaDerived(stores, fn as any, initialValue);
   return {
     subscribe: thisStore.subscribe,
-    ...(anyLoadable(stores) && {
-      load: loadDependencies(thisStore, loadAll, stores),
-    }),
+    load: loadDependencies(thisStore, loadAll, stores),
     ...(anyReloadable(stores) && {
       reload: loadDependencies(thisStore, reloadAll, stores),
     }),
   };
 }
+
+/**
+ * Create a `Writable` store that allows both updating and reading by subscription.
+ * @param {*=}value initial value
+ * @param {StartStopNotifier=}start start and stop notifications for subscriptions
+ */
+export const writable = <T>(
+  value?: T,
+  start?: StartStopNotifier<T>
+): Writable<T> & Loadable<T> => {
+  let resolveLoadPromise: (value: T | PromiseLike<T>) => void;
+  let loadPromise: Promise<T> = new Promise((resolve) => {
+    resolveLoadPromise = resolve;
+  });
+
+  const startAndLoad: StartStopNotifier<T> = (vanillaSet: Subscriber<T>) => {
+    const customSet = (value: T) => {
+      vanillaSet(value);
+      resolveLoadPromise(value);
+      loadPromise = Promise.resolve(value);
+    };
+    return start(customSet);
+  };
+
+  const thisStore = vanillaWritable(value, start && startAndLoad);
+
+  if (value !== undefined) {
+    resolveLoadPromise(value);
+    loadPromise = Promise.resolve(value);
+  }
+
+  return {
+    ...thisStore,
+    set: (value: T) => {
+      thisStore.set(value);
+      resolveLoadPromise(value);
+      loadPromise = Promise.resolve(value);
+    },
+    update: (updater: Updater<T>) => {
+      const newValue = updater(get(thisStore));
+      thisStore.set(newValue);
+      resolveLoadPromise(newValue);
+      loadPromise = Promise.resolve(newValue);
+    },
+    load: () => loadPromise,
+  };
+};
+
+/**
+ * Creates a `Readable` store that allows reading by subscription.
+ * @param value initial value
+ * @param {StartStopNotifier}start start and stop notifications for subscriptions
+ */
+export const readable = <T>(
+  value?: T,
+  start?: StartStopNotifier<T>
+): Loadable<T> => {
+  const thisStore = writable(value, start);
+  return {
+    subscribe: thisStore.subscribe,
+    load: thisStore.load,
+  };
+};

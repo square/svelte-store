@@ -8,6 +8,7 @@ import {
   isReloadable,
   Loadable,
   loadAll,
+  Readable,
   readable,
   reloadAll,
   safeLoad,
@@ -16,7 +17,8 @@ import {
 
 describe('loadAll / reloadAll utils', () => {
   const myNonAsync = readable('A');
-  const myLoadable = { load: () => Promise.resolve('B') } as Loadable<string>;
+  const myLoadable = { load: () => Promise.resolve('B') } as Loadable<string> &
+    Readable<string>;
   const myReloadable = {
     load: () => Promise.resolve('C'),
     reload: () => Promise.resolve('D'),
@@ -201,10 +203,7 @@ describe('asyncWritable', () => {
     });
 
     it('loads asyncReadable parent', () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        mockReload
-      );
+      const asyncReadableParent = asyncReadable(undefined, mockReload);
       const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
         Promise.resolve(`derived from ${storeValue}`)
       );
@@ -215,11 +214,7 @@ describe('asyncWritable', () => {
     });
 
     it('reloads reloadable parent', async () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        mockReload,
-        true
-      );
+      const asyncReadableParent = asyncReadable(undefined, mockReload, true);
       const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
         Promise.resolve(`derived from ${storeValue}`)
       );
@@ -233,9 +228,8 @@ describe('asyncWritable', () => {
     });
 
     it('rejects load when parent load fails', () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        () => Promise.reject(new Error('error'))
+      const asyncReadableParent = asyncReadable(undefined, () =>
+        Promise.reject(new Error('error'))
       );
       const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
         Promise.resolve(`derived from ${storeValue}`)
@@ -248,15 +242,10 @@ describe('asyncWritable', () => {
 
   describe('multiple parents asyncDerived', () => {
     it('correctly derives from every kind of parent', async () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        () => Promise.resolve('loadable')
+      const asyncReadableParent = asyncReadable(undefined, () =>
+        Promise.resolve('loadable')
       );
-      const reloadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        mockReload,
-        true
-      );
+      const reloadableParent = asyncReadable(undefined, mockReload, true);
       const myAsyncDerived = asyncDerived(
         [writableParent, asyncReadableParent, reloadableParent],
         ([$writableParent, $loadableParent, $reloadableParent]) =>
@@ -548,10 +537,7 @@ describe('asyncWritable', () => {
     });
 
     it('loads asyncReadable parent', () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        mockReload
-      );
+      const asyncReadableParent = asyncReadable(undefined, mockReload);
       const myAsyncWritable = asyncWritable(
         asyncReadableParent,
         (storeValue) => `derived from ${storeValue}`,
@@ -564,10 +550,7 @@ describe('asyncWritable', () => {
     });
 
     it('can access asyncReadable parent loaded value while writing', async () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        mockReload
-      );
+      const asyncReadableParent = asyncReadable(undefined, mockReload);
       const myAsyncWritable = asyncWritable(
         asyncReadableParent,
         (storeValue) => `derived from ${storeValue}`,
@@ -585,11 +568,7 @@ describe('asyncWritable', () => {
     });
 
     it('reloads reloadable parent', async () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        mockReload,
-        true
-      );
+      const asyncReadableParent = asyncReadable(undefined, mockReload, true);
       const myAsyncWritable = asyncWritable(
         asyncReadableParent,
         (storeValue) => `derived from ${storeValue}`,
@@ -609,9 +588,8 @@ describe('asyncWritable', () => {
     });
 
     it('rejects load when parent load fails', () => {
-      const asyncReadableParent: Loadable<string> = asyncReadable(
-        undefined,
-        () => Promise.reject(new Error('error'))
+      const asyncReadableParent = asyncReadable(undefined, () =>
+        Promise.reject(new Error('error'))
       );
       const myAsyncWritable = asyncWritable(
         asyncReadableParent,
@@ -694,6 +672,107 @@ describe('synchronous derived', () => {
       nonAsyncParent.set('K');
       nonAsyncParent.set('L');
       expect(get(myDerived)).toBe('L');
+    });
+  });
+});
+
+describe('readable/writable stores', () => {
+  describe('writable', () => {
+    it('only loads after being set', async () => {
+      let isResolved = false;
+      const myWritable = writable();
+      const resolutionPromise = myWritable
+        .load()
+        .then(() => (isResolved = true));
+
+      expect(get(myWritable)).toBe(undefined);
+      expect(isResolved).toBe(false);
+
+      myWritable.set('value');
+
+      await resolutionPromise;
+      expect(isResolved).toBe(true);
+      expect(get(myWritable)).toBe('value');
+    });
+
+    it('loads immeadietly when provided initial value', async () => {
+      const myWritable = writable('initial');
+
+      const initial = await myWritable.load();
+      expect(initial).toBe('initial');
+      expect(get(myWritable)).toBe('initial');
+
+      myWritable.set('updated');
+
+      const updated = await myWritable.load();
+      expect(updated).toBe('updated');
+      expect(get(myWritable)).toBe('updated');
+    });
+
+    it('loads to updated value', () => {
+      const myWritable = writable('foo');
+      myWritable.update((value) => `${value}bar`);
+
+      expect(get(myWritable)).toBe('foobar');
+      expect(myWritable.load()).resolves.toBe('foobar');
+    });
+
+    it('loads from start function', async () => {
+      const myWritable = writable(undefined, (set) => {
+        setTimeout(() => set('value'), 50);
+      });
+
+      expect(get(myWritable)).toBe(undefined);
+      const loaded = await myWritable.load();
+      expect(loaded).toBe('value');
+      expect(get(myWritable)).toBe('value');
+    });
+
+    it('fires unsubscribe callback when unsubscribed', () => {
+      const mockUnsubscribe = jest.fn();
+      const myWritable = writable(undefined, (set) => {
+        set('initial');
+        return mockUnsubscribe;
+      });
+      const unsubscribe = myWritable.subscribe(jest.fn());
+
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      unsubscribe();
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    });
+  });
+
+  describe('readable', () => {
+    it('loads immeadietly when provided initial value', async () => {
+      const myReadable = readable('initial');
+
+      const initial = await myReadable.load();
+      expect(initial).toBe('initial');
+      expect(get(myReadable)).toBe('initial');
+    });
+
+    it('loads from start function', async () => {
+      const myReadable = readable(undefined, (set) => {
+        setTimeout(() => set('value'), 50);
+      });
+
+      expect(get(myReadable)).toBe(undefined);
+      const loaded = await myReadable.load();
+      expect(loaded).toBe('value');
+      expect(get(myReadable)).toBe('value');
+    });
+
+    it('fires unsubscribe callback when unsubscribed', () => {
+      const mockUnsubscribe = jest.fn();
+      const myReadable = readable(undefined, (set) => {
+        set('initial');
+        return mockUnsubscribe;
+      });
+      const unsubscribe = myReadable.subscribe(jest.fn());
+
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      unsubscribe();
+      expect(mockUnsubscribe).toHaveBeenCalled();
     });
   });
 });
