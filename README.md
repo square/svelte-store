@@ -248,7 +248,7 @@ If you are using eslint, `eslint-plugin-square-svelte-store` will enforce usage 
 // .eslintrc.js
 module.exports = {
   plugins: ['square-svelte-store'],
-  rules: {'square-svelte-store/use-square-svelte-store': 'error'}
+  rules: {'square-svelte-store/use-square-svelte-stores': 'error'}
 }
 ```
 
