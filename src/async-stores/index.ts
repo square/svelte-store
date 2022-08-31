@@ -203,7 +203,8 @@ export const asyncWritable = <S extends Stores, T>(
 
         const writeResponse = (await mappingWriteFunction(
           newValue,
-          parentValues,
+          // if mappingWriteFunction takes in single store rather than array, give it first value
+          Array.isArray(stores) ? parentValues : parentValues[0],
           oldValue
         )) as T;
 

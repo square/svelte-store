@@ -636,7 +636,10 @@ describe('asyncWritable', () => {
         (storeValue) => `derived from ${storeValue}`,
         (value, $asyncReadableParent) =>
           Promise.resolve(
-            `constructed from ${value} and ${$asyncReadableParent}`
+            `constructed from ${value} and ${JSON.stringify(
+              $asyncReadableParent
+              // remove leading and trailing quotes
+            ).slice(1, -1)}`
           )
       );
       myAsyncWritable.subscribe(jest.fn);
