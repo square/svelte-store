@@ -38,6 +38,10 @@ export interface Loadable<T> extends Readable<T> {
   flagForReload?(): void;
 }
 
+export interface Reloadable<T> extends Loadable<T> {
+  reload(): Promise<T>;
+}
+
 export interface AsyncWritable<T> extends Writable<T> {
   set(value: T, persist?: boolean): Promise<void>;
   update(updater: Updater<T>): Promise<void>;
@@ -64,10 +68,10 @@ const getStoresArray = (stores: Stores): Readable<unknown>[] => {
   return Array.isArray(stores) ? stores : [stores];
 };
 
-export const isLoadable = (object: unknown): boolean =>
+export const isLoadable = <T>(object: unknown): object is Loadable<T> =>
   Object.prototype.hasOwnProperty.call(object, 'load');
 
-export const isReloadable = (object: unknown): boolean =>
+export const isReloadable = <T>(object: unknown): object is Reloadable<T> =>
   Object.prototype.hasOwnProperty.call(object, 'reload');
 
 export const anyLoadable = (stores: Stores): boolean =>
