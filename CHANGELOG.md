@@ -1,5 +1,9 @@
 # Changelog #
 
+## <small>0.2.3 (2022-09-20)</small>
+
+- fix: loading a readable/writable store will run start function
+
 ## <small>0.2.2 (2022-09-20)</small>
 
 - fix: unsubscribing from async stores now correctly unsubscribes from parents
