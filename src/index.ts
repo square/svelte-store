@@ -426,36 +426,56 @@ export const writable = <T>(
     resolveLoadPromise = resolve;
   });
 
+  let dummyUnsubscribe: Unsubscriber;
+
+  const resolve = (value: T) => {
+    resolveLoadPromise(value);
+    loadPromise = Promise.resolve(value);
+    if (dummyUnsubscribe) {
+      // cleanup our dummy subscription from loading
+      dummyUnsubscribe();
+      dummyUnsubscribe = undefined;
+    }
+  };
+
   const startAndLoad: StartStopNotifier<T> = (vanillaSet: Subscriber<T>) => {
     const customSet = (value: T) => {
       vanillaSet(value);
-      resolveLoadPromise(value);
-      loadPromise = Promise.resolve(value);
+      resolve(value);
     };
     return start(customSet);
   };
 
   const thisStore = vanillaWritable(value, start && startAndLoad);
 
+  const load = () => {
+    if (!dummyUnsubscribe) {
+      // Create a dummy subscription when we load the store.
+      // This ensures that we will have at least one subscriber when
+      // loading the store so that our start function will run.
+      dummyUnsubscribe = thisStore.subscribe(() => {
+        /* no-op */
+      });
+    }
+    return loadPromise;
+  };
+
   if (value !== undefined) {
-    resolveLoadPromise(value);
-    loadPromise = Promise.resolve(value);
+    resolve(value);
   }
 
   return {
     ...thisStore,
     set: (value: T) => {
       thisStore.set(value);
-      resolveLoadPromise(value);
-      loadPromise = Promise.resolve(value);
+      resolve(value);
     },
     update: (updater: Updater<T>) => {
       const newValue = updater(get(thisStore));
       thisStore.set(newValue);
-      resolveLoadPromise(newValue);
-      loadPromise = Promise.resolve(newValue);
+      resolve(newValue);
     },
-    load: () => loadPromise,
+    load,
   };
 };
 

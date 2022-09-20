@@ -812,6 +812,34 @@ describe('readable/writable stores', () => {
       unsubscribe();
       expect(mockUnsubscribe).toHaveBeenCalled();
     });
+
+    it('will load from start function correctly without subscription', async () => {
+      const myReadable = readable(undefined, (set) => {
+        setTimeout(() => {
+          set('value');
+        }, 50);
+      });
+
+      const $myReadable = await myReadable.load();
+      expect($myReadable).toBe('value');
+    });
+
+    it('runs stop callback after loading with no subscriptions', async () => {
+      const stop = jest.fn();
+
+      const myReadable = readable(undefined, (set) => {
+        setTimeout(() => {
+          set('value');
+        }, 50);
+        return stop;
+      });
+
+      const load = myReadable.load();
+      expect(stop).not.toHaveBeenCalled();
+      const value = await load;
+      expect(value).toBe('value');
+      expect(stop).toHaveBeenCalled();
+    });
   });
 });
 /* eslint-enable prefer-promise-reject-errors */
