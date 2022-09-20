@@ -238,6 +238,44 @@ describe('asyncWritable', () => {
 
       expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
     });
+
+    it('correcly unsubscribes from parents', async () => {
+      const writableParent = writable('initial');
+      const firstDerivedLoad = jest.fn(($parent) =>
+        Promise.resolve(`${$parent} first`)
+      );
+      const firstDerived = asyncDerived(writableParent, firstDerivedLoad);
+      const secondDerivedLoad = jest.fn(($parent) =>
+        Promise.resolve(`${$parent} second`)
+      );
+      const secondDerived = asyncDerived(writableParent, secondDerivedLoad);
+
+      let firstValue;
+      const firstUnsubscribe = firstDerived.subscribe(
+        (value) => (firstValue = value)
+      );
+      let secondValue;
+      secondDerived.subscribe((value) => (secondValue = value));
+
+      // this sucks but I can't figure out a better way to wait for the
+      // subscribe callbacks to get called without generating a new subscription
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      expect(firstValue).toBe('initial first');
+      expect(secondValue).toBe('initial second');
+      expect(firstDerivedLoad).toHaveBeenCalledTimes(1);
+      expect(secondDerivedLoad).toHaveBeenCalledTimes(1);
+
+      firstUnsubscribe();
+      writableParent.set('updated');
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      expect(firstValue).toBe('initial first');
+      expect(secondValue).toBe('updated second');
+      expect(firstDerivedLoad).toHaveBeenCalledTimes(1);
+      expect(secondDerivedLoad).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('multiple parents asyncDerived', () => {

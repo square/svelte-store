@@ -194,11 +194,14 @@ export const asyncWritable = <S extends Stores, T>(
 
   const thisStore = vanillaWritable(initial, () => {
     loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
-    getStoresArray(stores).map((store) =>
+    const parentUnsubscribers = getStoresArray(stores).map((store) =>
       store.subscribe(() => {
         loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
       })
     );
+    return () => {
+      parentUnsubscribers.map((unsubscriber) => unsubscriber());
+    };
   });
 
   loadDependenciesThenSet = async (
