@@ -1,3 +1,10 @@
+# Changelog #
+
+## <small>0.2.2 (2022-09-20)</small>
+
+- fix: unsubscribing from async stores now correctly unsubscribes from parents
+- chore: add type guards to output of loadable checks
+
 ## 0.2.0 (2022-07-09)
 
 - *BREAKING CHANGE* feat: add load functionality to readable/writable stores
