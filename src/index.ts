@@ -49,6 +49,11 @@ export interface AsyncWritable<T> extends Writable<T> {
 
 export interface WritableLoadable<T> extends AsyncWritable<T>, Loadable<T> {}
 
+export interface AsyncStoreOptions<T> {
+  reloadable?: true;
+  initial?: T;
+}
+
 /* These types come from Svelte but are not exported, so copying them here */
 /* One or more `Readable`s. */
 export declare type Stores =
@@ -179,9 +184,10 @@ export const asyncWritable = <S extends Stores, T>(
     parentValues?: StoresValues<S>,
     oldValue?: T
   ) => Promise<void | T>,
-  reloadable?: boolean,
-  initial: T = undefined
+  options: AsyncStoreOptions<T> = {}
 ): WritableLoadable<T> => {
+  const { reloadable, initial } = options;
+
   let loadedValuesString: string;
   let currentLoadPromise: Promise<T>;
   let forceReload = false;
@@ -323,15 +329,13 @@ export const asyncWritable = <S extends Stores, T>(
 export const asyncDerived = <S extends Stores, T>(
   stores: S,
   mappingLoadFunction: (values: StoresValues<S>) => Promise<T>,
-  reloadable?: boolean,
-  initial: T = undefined
+  options?: AsyncStoreOptions<T>
 ): Loadable<T> => {
   const thisStore = asyncWritable(
     stores,
     mappingLoadFunction,
     undefined,
-    reloadable,
-    initial
+    options
   );
   return {
     subscribe: thisStore.subscribe,
@@ -355,9 +359,9 @@ export const asyncDerived = <S extends Stores, T>(
 export const asyncReadable = <T>(
   initial: T,
   loadFunction: () => Promise<T>,
-  reloadable = false
+  options?: Omit<AsyncStoreOptions<T>, 'initial'>
 ): Loadable<T> => {
-  return asyncDerived([], loadFunction, reloadable, initial);
+  return asyncDerived([], loadFunction, { ...options, initial });
 };
 
 type DerivedMapper<S extends Stores, T> = (values: StoresValues<S>) => T;

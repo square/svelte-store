@@ -13,6 +13,7 @@ import {
   reloadAll,
   safeLoad,
   writable,
+  WritableLoadable,
 } from '../src/index';
 
 describe('loadAll / reloadAll utils', () => {
@@ -130,7 +131,9 @@ describe('asyncWritable', () => {
     });
 
     it('does reload if reloadable', async () => {
-      const myAsyncDerived = asyncReadable(undefined, mockReload, true);
+      const myAsyncDerived = asyncReadable(undefined, mockReload, {
+        reloadable: true,
+      });
       myAsyncDerived.subscribe(jest.fn);
 
       expect(myAsyncDerived.load()).resolves.toBe('first value');
@@ -157,8 +160,7 @@ describe('asyncWritable', () => {
       const myAsyncDerived = asyncDerived(
         writableParent,
         () => Promise.reject(new Error('error')),
-        false,
-        'initial'
+        { initial: 'initial' }
       );
       myAsyncDerived.subscribe(jest.fn);
 
@@ -176,12 +178,9 @@ describe('asyncWritable', () => {
     });
 
     it('does reload if reloadable', async () => {
-      const myAsyncDerived = asyncDerived(
-        writableParent,
-        mockReload,
-        true,
-        undefined
-      );
+      const myAsyncDerived = asyncDerived(writableParent, mockReload, {
+        reloadable: true,
+      });
       myAsyncDerived.subscribe(jest.fn);
 
       expect(myAsyncDerived.load()).resolves.toBe('first value');
@@ -214,7 +213,9 @@ describe('asyncWritable', () => {
     });
 
     it('reloads reloadable parent', async () => {
-      const asyncReadableParent = asyncReadable(undefined, mockReload, true);
+      const asyncReadableParent = asyncReadable(undefined, mockReload, {
+        reloadable: true,
+      });
       const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
         Promise.resolve(`derived from ${storeValue}`)
       );
@@ -283,7 +284,9 @@ describe('asyncWritable', () => {
       const asyncReadableParent = asyncReadable(undefined, () =>
         Promise.resolve('loadable')
       );
-      const reloadableParent = asyncReadable(undefined, mockReload, true);
+      const reloadableParent = asyncReadable(undefined, mockReload, {
+        reloadable: true,
+      });
       const myAsyncDerived = asyncDerived(
         [writableParent, asyncReadableParent, reloadableParent],
         ([$writableParent, $loadableParent, $reloadableParent]) =>
@@ -388,7 +391,7 @@ describe('asyncWritable', () => {
         [],
         mappingLoadFunction,
         mappingWriteFunction,
-        true
+        { reloadable: true }
       );
       myAsyncWritable.subscribe(jest.fn);
 
@@ -519,8 +522,7 @@ describe('asyncWritable', () => {
         writableParent,
         () => Promise.reject(new Error('error')),
         mappingWriteFunction,
-        false,
-        'initial' as string
+        { initial: 'initial' }
       );
       myAsyncWritable.subscribe(jest.fn);
 
@@ -549,8 +551,7 @@ describe('asyncWritable', () => {
         writableParent,
         mockReload,
         () => Promise.resolve(),
-        true,
-        undefined
+        { reloadable: true }
       );
       myAsyncWritable.subscribe(jest.fn);
 
@@ -606,12 +607,14 @@ describe('asyncWritable', () => {
     });
 
     it('reloads reloadable parent', async () => {
-      const asyncReadableParent = asyncReadable(undefined, mockReload, true);
-      const myAsyncWritable = asyncWritable(
+      const asyncReadableParent = asyncReadable(undefined, mockReload, {
+        reloadable: true,
+      });
+      const myAsyncWritable: WritableLoadable<string> = asyncWritable(
         asyncReadableParent,
         (storeValue) => `derived from ${storeValue}`,
         () => Promise.resolve(),
-        true
+        { reloadable: true }
       );
       myAsyncWritable.subscribe(jest.fn);
 
@@ -657,7 +660,9 @@ describe('synchronous derived', () => {
       .mockResolvedValueOnce('first value')
       .mockResolvedValueOnce('second value')
       .mockResolvedValueOnce('third value');
-    reloadableGrandparent = asyncReadable(undefined, mockReload, true);
+    reloadableGrandparent = asyncReadable(undefined, mockReload, {
+      reloadable: true,
+    });
     derivedParent = derived(reloadableGrandparent, ($reloadableGrandparent) =>
       $reloadableGrandparent?.toUpperCase()
     );
