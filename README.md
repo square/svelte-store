@@ -11,7 +11,7 @@ Square Svelte Store builds upon Svelte's default store behavior to empower your 
 ```javascript
 // You can declare an asyncDerived store just like a derived store,
 // but with an async function to set the store's value!
-const  searchResults = asyncDerived(
+const searchResults = asyncDerived(
   [authToken, searchTerms],
   async ([$authToken, $searchTerms]) => {
     const rawResults = await search($authToken, $searchTerms);
@@ -64,7 +64,7 @@ const userInfo = asyncReadable(
 
 Now we have a Loadable and reloadable userInfo store! As soon as our app renders a component that needs data from userInfo it will begin to load. We can `{#await userInfo.load()}` in our components that need userInfo. This will delay rendering until we have the data we need. Since we have provided `true` as a third argument we can call `userInfo.reload()` to pull new data (and reactively update our components once we have it).
 
-## derived
+### derived
 
 Okay this isn't a new store, but it does have some new features! We declare a derived store the same as ever, but it now gives us access to a `load` function. This load function resolves after all parents have loaded and the derived store has calculated its final value.
 
@@ -79,7 +79,7 @@ Now we've got a darkMode store that tracks whether our user has selected darkMod
 
 This isn't very impressive with our simple example, but as we build out our app and encounter situations where derived values come fom multiple endpoints through several layers of derivations this becomes much more useful. Being able to call load and reload on just the data you need is much more convenient than tracking down all of the dependencies involved!
 
-## asyncDerived
+### asyncDerived
 
 An asyncDerived store works just like a derived store, but with an asynchronous call to get the final value of the store!
 
@@ -103,7 +103,7 @@ Here we have a store that reflects a paginated set of results from an endpoint. 
 
 After the stores have finished loading any new changes to the parent stores will create a new network request. In this example if we write to the page store when the user changes pages we will automatically make a new request that will update our results store. Just like with asyncReadable stores we can include a boolean to indicate that an asyncDerived store will be Reloadable.
 
-## asyncWritable
+### asyncWritable
 
 Here's where things get a little more complicated. Just like the other async stores this store mirrors an existing store. Like a regular writable store this store will have `set` and `update` functions that lets you set the store's value. But why would we want to set the value of the store if the store's value comes from a network call? To answer this let's consider the following use case: in our app we have a list of favorite shortcuts for our user. They can rearrange these shortcuts in order to personalize their experience. When a user rearranges their shortcuts we could manually make a new network request to save their choice, then reload the async store that tracks the list of shortcuts. However that would mean that the user would not see the results of their customization until the network request completes. Instead we can use an asyncWritable store. When the user customizes their list of shortcuts we will optimistically update the corresponding store. This update kicks off a network request to save the user's customization to our backend. Finally, when the network request completes we update our store to reflect the canonical version of the user's list.
 
@@ -162,7 +162,7 @@ In this example we derive from an authToken store and include it in both our GET
 
 Some niche features of asyncWritable stores allow for more specific error handling of write functions. The write function we provide as the third argument can be written to accept a third argument that receives the value of the store before it was set. This allows for resetting the value of the store in the case of a write failure by catching the error and returning the old value. A similar feature is that both the `set` and `update` functions can take a second argument that indicates whether the async write functionality should be called during the set process.
 
-## readable/writable
+### readable/writable
 
 Similarly to derived stores, addtional load functionality is bundled with readable and writable stores. Both readable and writable stores include a `.load()` function that will resolve when the value of the store is first set. If an initial value is provided when creating the store, this means the store will load immeadietly. However, if a value is not provided (left `undefined`) then the store will only load after it is set to a value. This makes it easy to wait on user input, an event listener, etc. in your application.
 
@@ -197,6 +197,70 @@ Similarly to derived stores, addtional load functionality is bundled with readab
   <p>{$needsConsent}</p>
 {/await}
 ```
+
+### persisted
+
+Sometimes data needs to persist outside the lifecycle of our app. We can use persisted stores to accomplish this and will gain all of the other benefits of Loadable stores. A persisted store synchronizes store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
+
+*We can persist a user name across page loads...*
+
+```javascript
+<script>
+  // if we don't specify what kind of storage, default to localStorage
+  const userName = persisted('John Doe', 'USER_DATA');
+</script>
+
+// If we reload the page, this input will still have the same value!
+<input bind:value={$userName}>
+```
+
+If data isn't already in storage, it may need to be fetched asynchronously. In this case we can pass a Loadable store to our persisted store in place of an initial value. Doing so will load the Loadable store if no storage item is found and then synchronize the persisted store and storage with the loaded value. We can also declare the persisted store to be reloadable, in which case a call to `reload()` will attempt to reload the provided Loadable store and persist the new data to storage.
+
+*Persisting remote data is simple...*
+
+```javascript
+const remoteSessionToken = asyncReadable(
+  undefined, 
+  async () => {
+    const session = await generateSession();
+    return session.token;
+  },
+  { reloadable: true, storageType: StorageType.SESSION_STORAGE },
+);
+
+const sessionToken = persisted(
+  remoteSessionToken,
+  'SESSION_TOKEN',
+  {reloadable: true}
+);
+```
+
+With this setup we can persist our remote data across a page session! The first page load of the session will load from the remote source, but successive page loads will use the persisted token in session storage. What's more is that because Loadable stores are lazily loaded, `remoteSessionToken` will only fetch remote data when its needed for `sessionToken` (provided there are no other subscribers to `remoteSessionToken`). If our session token ever expires we can force new data to be loaded by calling `sessionToken.reload()`!
+
+#### persisted configuration / consent
+
+Persisting data to storage or cookies is subject to privacy laws regarding consent in some jurisdictions. Instead of building two different data flows that depend on whether tracking consent has been given or not, we can instead configure our persisted stores to work in both cases. To do so we will need to call the `configurePersistedConsent` function and pass in a consent checker  that will accept a `consent level` and return a boolean indicating whether our user has consented to that level of tracking. We can then provide a consent level when building our persisted stores that will be passed to to the checker before storing data.
+
+*Supporting tracking consent is simple...*
+
+```javascript
+configurePersistedConsent(
+  (consentLevel) =>  window.consentLevels.includes(consentLevel);
+);
+
+const hasDismissedTooltip = persisted(
+  false, 
+  'TOOLTIP_DISMISSED', 
+  { 
+    storageType: StorageType.COOKIE,
+    consentLevel: 'TRACKING'
+  }
+);
+```
+
+In this example we assume a setup where a user's consentLevels are accessible through the window object. We would like to track the dismissal of a tooltip and ideally persist that across page loads. To do so we set up a `hasDismissedTooltip` store that can bet set like any other writable store. If the user has consented to the `TRACKING` consent level then setting the store will also set a `TOOLTIP_DISMISSED` cookie. Otherwise no data will be persisted and the store will reinitialize to the default value `false` on each page load.
+
+Note that if no consent level is provided, `undefined` will be passed to the consent checker. This can be handled to provide a default consent for your persisted stores when a consent level is not provided.
 
 ## Additional functions
 

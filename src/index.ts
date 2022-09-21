@@ -9,6 +9,14 @@ import {
   Writable,
   writable as vanillaWritable,
 } from 'svelte/store';
+import {
+  getCookie,
+  getLocalStorageItem,
+  getSessionStorageItem,
+  setCookie,
+  setSessionStorageItem,
+  setLocalStorageItem,
+} from './storage-utils';
 
 export { get } from 'svelte/store';
 export type {
@@ -289,26 +297,29 @@ export const asyncWritable = <S extends Stores, T>(
     }
   };
 
+  // required properties
+  const subscribe = thisStore.subscribe;
   const set = (newValue: T, persist = true) =>
     setStoreValueThenWrite(() => newValue, persist);
   const update = (updater: Updater<T>, persist = true) =>
     setStoreValueThenWrite(updater, persist);
+  const load = () => loadDependenciesThenSet(loadAll);
 
+  // optional properties
   const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
+  const reload = hasReloadFunction
+    ? () => loadDependenciesThenSet(reloadAll, reloadable)
+    : undefined;
+
+  const flagForReload = testingMode ? () => (forceReload = true) : undefined;
 
   return {
-    subscribe: thisStore.subscribe,
+    subscribe,
     set,
     update,
-    load: () => loadDependenciesThenSet(loadAll),
-    ...(hasReloadFunction && {
-      reload: () => loadDependenciesThenSet(reloadAll, reloadable),
-    }),
-    ...(testingMode && {
-      flagForReload: () => {
-        forceReload = true;
-      },
-    }),
+    load,
+    ...(reload && { reload }),
+    ...(flagForReload && { flagForReload }),
   };
 };
 
@@ -331,17 +342,18 @@ export const asyncDerived = <S extends Stores, T>(
   mappingLoadFunction: (values: StoresValues<S>) => Promise<T>,
   options?: AsyncStoreOptions<T>
 ): Loadable<T> => {
-  const thisStore = asyncWritable(
+  const { subscribe, load, reload, flagForReload } = asyncWritable(
     stores,
     mappingLoadFunction,
     undefined,
     options
   );
+
   return {
-    subscribe: thisStore.subscribe,
-    load: thisStore.load,
-    ...(thisStore.reload && { reload: thisStore.reload }),
-    ...(thisStore.flagForReload && { flagForReload: thisStore.flagForReload }),
+    subscribe,
+    load,
+    ...(reload && { reload }),
+    ...(flagForReload && { flagForReload }),
   };
 };
 
@@ -407,12 +419,15 @@ export function derived<S extends Stores, T>(
   initialValue?: T
 ): Loadable<T> {
   const thisStore = vanillaDerived(stores, fn as any, initialValue);
+  const load = loadDependencies(thisStore, loadAll, stores);
+  const reload = anyReloadable(stores)
+    ? loadDependencies(thisStore, reloadAll, stores)
+    : undefined;
+
   return {
-    subscribe: thisStore.subscribe,
-    load: loadDependencies(thisStore, loadAll, stores),
-    ...(anyReloadable(stores) && {
-      reload: loadDependencies(thisStore, reloadAll, stores),
-    }),
+    ...thisStore,
+    load,
+    ...(reload && { reload }),
   };
 }
 
@@ -468,17 +483,20 @@ export const writable = <T>(
     resolve(value);
   }
 
+  const set = (value: T) => {
+    thisStore.set(value);
+    resolve(value);
+  };
+  const update = (updater: Updater<T>) => {
+    const newValue = updater(get(thisStore));
+    thisStore.set(newValue);
+    resolve(newValue);
+  };
+
   return {
     ...thisStore,
-    set: (value: T) => {
-      thisStore.set(value);
-      resolve(value);
-    },
-    update: (updater: Updater<T>) => {
-      const newValue = updater(get(thisStore));
-      thisStore.set(newValue);
-      resolve(newValue);
-    },
+    set,
+    update,
     load,
   };
 };
@@ -492,9 +510,137 @@ export const readable = <T>(
   value?: T,
   start?: StartStopNotifier<T>
 ): Loadable<T> => {
-  const thisStore = writable(value, start);
+  const { subscribe, load } = writable(value, start);
+
   return {
-    subscribe: thisStore.subscribe,
-    load: thisStore.load,
+    subscribe,
+    load,
+  };
+};
+
+// STORAGE
+
+export enum StorageType {
+  LOCAL_STORAGE = 'LOCAL_STORAGE',
+  SESSION_STORAGE = 'SESSION_STORAGE',
+  COOKIE = 'COOKIE',
+}
+
+export type StorageOptions = {
+  reloadable?: true;
+  storageType?: StorageType;
+  consentLevel?: unknown;
+};
+
+type GetStorageItem = (key: string, consentLevel?: unknown) => string | null;
+type SetStorageItem = (
+  key: string,
+  value: string,
+  consentLevel?: unknown
+) => void;
+
+const getStorageFunctions = (
+  type: StorageType
+): {
+  getStorageItem: GetStorageItem;
+  setStorageItem: SetStorageItem;
+} => {
+  return {
+    [StorageType.LOCAL_STORAGE]: {
+      getStorageItem: getLocalStorageItem,
+      setStorageItem: setLocalStorageItem,
+    },
+    [StorageType.SESSION_STORAGE]: {
+      getStorageItem: getSessionStorageItem,
+      setStorageItem: setSessionStorageItem,
+    },
+    [StorageType.COOKIE]: {
+      getStorageItem: getCookie,
+      setStorageItem: setCookie,
+    },
+  }[type];
+};
+
+type ConsentChecker = (consentLevel: any) => boolean;
+
+let checkConsent: ConsentChecker;
+
+export const configurePersistedConsent = (
+  consentChecker: ConsentChecker
+): void => {
+  checkConsent = consentChecker;
+};
+
+/**
+ * Creates a `Writable` store that synchronizes with a localStorage item,
+ * sessionStorage item, or cookie. The store's value will initialize to the value of
+ * the corresponding storage item if found, otherwise it will use the provided initial
+ * value and persist that value in storage. Any changes to the value of this store will
+ * be persisted in storage.
+ * @param initialOrParent The value to initialize to when used when a corresponding storage
+ * item is not found. If a Loadable store is provided the store will be loaded and its value
+ * used in this case.
+ * @param key The key of the storage item to synchronize.
+ * @param options Modifiers for store behavior.
+ */
+export const persisted = <T>(
+  initialOrParent: T | Loadable<T>,
+  key: string,
+  options: StorageOptions = {}
+): Writable<T> & Loadable<T> => {
+  const { reloadable, storageType, consentLevel } = options;
+
+  const { getStorageItem, setStorageItem } = getStorageFunctions(
+    storageType || StorageType.LOCAL_STORAGE
+  );
+
+  const thisStore = writable<T>();
+
+  const set = (value: T) => {
+    // check consent if checker provided
+    // if checker provided but not consentLevel, default to no consent
+    if (!checkConsent || (consentLevel && checkConsent(consentLevel))) {
+      setStorageItem(key, JSON.stringify(value), consentLevel);
+    }
+    thisStore.set(value);
+  };
+
+  const update = (updater: Updater<T>) => {
+    const newValue = updater(get(thisStore));
+    set(newValue);
+  };
+
+  const storageItem = getStorageItem(key);
+
+  if (storageItem) {
+    thisStore.set(JSON.parse(storageItem));
+  } else if (initialOrParent !== undefined) {
+    if (isLoadable(initialOrParent)) {
+      initialOrParent.load().then(($initial) => set($initial));
+    } else {
+      set(initialOrParent);
+    }
+  }
+
+  const reload = reloadable
+    ? async () => {
+        let newValue: T;
+
+        if (isLoadable(initialOrParent)) {
+          [newValue] = await reloadAll([initialOrParent]);
+        } else {
+          newValue = initialOrParent;
+        }
+
+        set(newValue);
+        return newValue;
+      }
+    : undefined;
+
+  return {
+    ...thisStore,
+    set,
+    update,
+    reload,
   };
 };
