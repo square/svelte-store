@@ -518,7 +518,7 @@ export const readable = <T>(
   };
 };
 
-// STORAGE
+// PERSISTED
 
 export enum StorageType {
   LOCAL_STORAGE = 'LOCAL_STORAGE',
@@ -643,4 +643,43 @@ export const persisted = <T>(
     update,
     reload,
   };
+};
+
+// ASYNC CLIENT
+
+type AsyncClient<T> = {
+  [k in keyof T]: T[k] extends (...args: infer TArgs) => infer TReturn // callable property?
+    ? (...args: TArgs) => Promise<TReturn> // make the function async
+    : () => Promise<T[k]>; // return the property in a Promise
+};
+
+/**
+ * Generates an AsyncClient from a Loadable store. The AsyncClient will have all
+ * of the properties of the input store, plus a collection of asynchronous functions
+ * for kicking off access of the store's value's properties before it has finished loading.
+ * i.e. an asyncClient that loads to {foo: 'bar'} will have a `foo` function that
+ * resolves to 'bar' when the store has loaded.
+ * @param loadable Loadable to unpack into an asnycClient
+ * @returns an asyncClient with the properties of the input store and asynchronous
+ * accessors to the properties of the store's loaded value
+ */
+export const asyncClient = <S extends Loadable<unknown>>(
+  loadable: S
+): S & AsyncClient<StoresValues<S>> => {
+  return new Proxy(loadable, {
+    get: (store, property) => {
+      if (store[property]) {
+        return store[property];
+      }
+      return async (...argumentsList: unknown[]) => {
+        const storeValue = await store.load();
+        const original = storeValue[property];
+        if (typeof original === 'function') {
+          return Reflect.apply(original, storeValue, argumentsList);
+        } else {
+          return original;
+        }
+      };
+    },
+  }) as unknown as S & AsyncClient<StoresValues<S>>;
 };

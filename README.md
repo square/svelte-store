@@ -262,6 +262,36 @@ In this example we assume a setup where a user's consentLevels are accessible th
 
 Note that if no consent level is provided, `undefined` will be passed to the consent checker. This can be handled to provide a default consent for your persisted stores when a consent level is not provided.
 
+### asnycClient
+
+An asyncClient is a special kind of store that expands the functionality of another Loadable store. Creating an asyncClient allows you to start accessing the propeties of the object in your store before it has loaded. This is done by transforming all of the object's properties into asynchronous functions that will resolve when the store has loaded.
+
+*Confusing in concept, but simple in practice...*
+
+```javascript
+const logger = asyncClient(readable(
+  undefined,
+  (set) => {
+    addEventListener('LOGGING_READY', () => {
+      set({
+        logError: (error) => window.log('ERROR', error.message),
+        logMessage: (message) => window.log('INFO', message),
+      });
+    })
+  }
+));
+
+logger.logMessage('Logging ready');
+```
+
+In this example we assume a hypothetical flow where a `LOGGING_READY` event is fired upon an external library adding a generic logger to the window object. We create a readable store that loads when this event fires, and set up an object with two functions for logging either errors or non-error messages. If we did not use an asyncClient we would need to call logMessage like so:
+`logger.load().then(($logger) => $logger.logMessage('Logging ready'))`
+However, by turning the readable store into an asyncClient we can instead call `logger.logMessage` immeadietly and the message will be logged when the `LOGGING_READY` event fires.
+
+Note that the asyncClient is still a store, and so can perform all of the store functionality of what it wraps. This means, for example, that you can make an asyncClient of a writable store and have access to the `set` and `update` functions.
+Non-function properties of the object loaded by the asyncClient can also be accessed using an async function. I.e. if an asyncClient loads to `{foo: 'bar'}`, `myClient.foo()` will resolve to 'bar' when the asyncClient has loaded.
+The property access for an asyncClient is performed dynamically, and that means that *any* property can attempt to be accessed. If the property can not be found when the asyncClient loads, this will resolve to `undefined`. It is recommended to use typescript to ensure that the accessed properties are members of the store's type.
+
 ## Additional functions
 
 ### isLoadable and isReloadable
