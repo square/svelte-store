@@ -239,7 +239,7 @@ With this setup we can persist our remote data across a page session! The first 
 
 #### persisted configuration / consent
 
-Persisting data to storage or cookies is subject to privacy laws regarding consent in some jurisdictions. Instead of building two different data flows that depend on whether tracking consent has been given or not, we can instead configure our persisted stores to work in both cases. To do so we will need to call the `configurePersistedConsent` function and pass in a consent checker  that will accept a `consent level` and return a boolean indicating whether our user has consented to that level of tracking. We can then provide a consent level when building our persisted stores that will be passed to to the checker before storing data.
+Persisting data to storage or cookies is subject to privacy laws regarding consent in some jurisdictions. Instead of building two different data flows that depend on whether tracking consent has been given or not, you can instead configure your persisted stores to work in both cases. To do so you will need to call the `configurePersistedConsent` function and pass in a consent checker that will accept a `consent level` and return a boolean indicating whether your user has consented to that level of tracking. You can then provide a consent level when building your persisted stores that will be passed to to the checker before storing data.
 
 *Supporting tracking consent is simple...*
 
@@ -258,7 +258,7 @@ const hasDismissedTooltip = persisted(
 );
 ```
 
-In this example we assume a setup where a user's consentLevels are accessible through the window object. We would like to track the dismissal of a tooltip and ideally persist that across page loads. To do so we set up a `hasDismissedTooltip` store that can bet set like any other writable store. If the user has consented to the `TRACKING` consent level then setting the store will also set a `TOOLTIP_DISMISSED` cookie. Otherwise no data will be persisted and the store will reinitialize to the default value `false` on each page load.
+In this example we assume a setup where a user's consentLevels are accessible through the window object. We would like to track the dismissal of a tooltip and ideally persist that across page loads. To do so we set up a `hasDismissedTooltip` store that can bet set like any other writable store. If the user has consented to the `TRACKING` consent level, then setting the store will also set a `TOOLTIP_DISMISSED` cookie. Otherwise no data will be persisted and the store will initialize to the default value `false` on each page load.
 
 Note that if no consent level is provided, `undefined` will be passed to the consent checker. This can be handled to provide a default consent for your persisted stores when a consent level is not provided.
 
@@ -314,6 +314,10 @@ The safeLoad function works similarly to loadAll, however any loading errors of 
   <ComponentContent/>
 {/await}
 ```
+
+### logAsyncErrors
+
+Using safeLoad or `{#await}{:then}{:catch}` blocks in templates allows you to catch and handle errors that occur during our async stores loading. However this can lead to a visibility problem: if you always catch the errors you may not be aware that your users are experiencing them. To deal with this you can pass an error logger into the `logAsyncErrors` function before you set up your stores. Then any time one of our async stores experiences an error while loading it will automatically call your error logging function regardless of how you handle the error downstream.
 
 ## Putting it all Together
 

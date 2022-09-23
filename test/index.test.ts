@@ -10,6 +10,7 @@ import {
   isReloadable,
   Loadable,
   loadAll,
+  logAsyncErrors,
   persisted,
   Readable,
   readable,
@@ -655,6 +656,41 @@ describe('asyncWritable', () => {
       myAsyncWritable.subscribe(jest.fn);
 
       expect(myAsyncWritable.load()).rejects.toStrictEqual(new Error('error'));
+    });
+  });
+
+  describe('error logging', () => {
+    afterEach(() => {
+      logAsyncErrors(undefined);
+    });
+
+    it('does not call error logger when no error', async () => {
+      const errorLogger = jest.fn();
+      logAsyncErrors(errorLogger);
+
+      const myReadable = asyncReadable(undefined, () =>
+        Promise.resolve('value')
+      );
+      await myReadable.load();
+
+      expect(errorLogger).not.toHaveBeenCalled();
+    });
+
+    it('does call error logger when async error', async () => {
+      const errorLogger = jest.fn();
+      logAsyncErrors(errorLogger);
+
+      const myReadable = asyncReadable(undefined, () =>
+        Promise.reject(new Error('error'))
+      );
+
+      // perform multiple loads and make sure logger only called once
+      await safeLoad(myReadable);
+      await safeLoad(myReadable);
+      await safeLoad(myReadable);
+
+      expect(errorLogger).toHaveBeenCalledWith(new Error('error'));
+      expect(errorLogger).toHaveBeenCalledTimes(1);
     });
   });
 });

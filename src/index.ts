@@ -166,6 +166,13 @@ export const safeLoad = async <S extends Stores>(
 
 // STORES
 
+type ErrorLogger = (e: Error) => void;
+let logError: ErrorLogger;
+
+export const logAsyncErrors = (logger: ErrorLogger): void => {
+  logError = logger;
+};
+
 /**
  * Generate a Loadable store that is considered 'loaded' after resolving synchronous or asynchronous behavior.
  * This behavior may be derived from the value of parent Loadable or non Loadable stores.
@@ -199,6 +206,17 @@ export const asyncWritable = <S extends Stores, T>(
   let loadedValuesString: string;
   let currentLoadPromise: Promise<T>;
   let forceReload = false;
+
+  const tryLoad = async (values: StoresValues<S>) => {
+    try {
+      return await mappingLoadFunction(values);
+    } catch (e) {
+      if (logError) {
+        logError(e);
+      }
+      throw e;
+    }
+  };
 
   // eslint-disable-next-line prefer-const
   let loadDependenciesThenSet: (
@@ -254,14 +272,16 @@ export const asyncWritable = <S extends Stores, T>(
       forceReload = false;
     }
 
-    // if mappingLoadFunction takes in single store rather than array, give it first value
-    currentLoadPromise = Promise.resolve(
-      mappingLoadFunction(Array.isArray(stores) ? storeValues : storeValues[0])
-    ).then((finalValue) => {
+    // convert storeValues to single store value if expected by mapping function
+    const loadInput = Array.isArray(stores) ? storeValues : storeValues[0];
+
+    const loadAndSet = async () => {
+      const finalValue = await tryLoad(loadInput);
       thisStore.set(finalValue);
       return finalValue;
-    });
+    };
 
+    currentLoadPromise = loadAndSet();
     return currentLoadPromise;
   };
 
