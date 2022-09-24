@@ -1,4 +1,5 @@
 /* eslint-disable prefer-promise-reject-errors */
+import { tick } from 'svelte';
 import {
   asyncClient,
   asyncDerived,
@@ -10,6 +11,7 @@ import {
   isReloadable,
   Loadable,
   loadAll,
+  LoadState,
   logAsyncErrors,
   persisted,
   Readable,
@@ -1194,6 +1196,285 @@ describe('readable/writable stores', () => {
       myClient.set({ foo: 'bar' });
       const result = await resultPromise;
       expect(result).toBe('bar');
+    });
+  });
+
+  describe('trackState', () => {
+    describe('adds state store when trackState enabled', () => {
+      it('works with asyncWritable', async () => {
+        const { store: myStore, state: myState } = asyncWritable(
+          [],
+          () => Promise.resolve('loaded value'),
+          undefined,
+          { initial: 'initial', trackState: true }
+        );
+
+        expect(get(myStore)).toBe('initial');
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('loaded value');
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+
+      it('works with asyncDerived', async () => {
+        const { store: myStore, state: myState } = asyncDerived(
+          [],
+          () => Promise.resolve('loaded value'),
+          { initial: 'initial', trackState: true }
+        );
+
+        expect(get(myStore)).toBe('initial');
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('loaded value');
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+
+      it('works with asyncReadable', async () => {
+        const { store: myStore, state: myState } = asyncReadable(
+          'initial',
+          () => Promise.resolve('loaded value'),
+          { trackState: true }
+        );
+
+        expect(get(myStore)).toBe('initial');
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('loaded value');
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+    });
+
+    describe('RELOADING state', () => {
+      it('tracks reloading', async () => {
+        const { store: myStore, state: myState } = asyncReadable(
+          'initial',
+          () => Promise.resolve('loaded value'),
+          { reloadable: true, trackState: true }
+        );
+
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        const reloadPromise = myStore.reload();
+
+        expect(get(myState)).toBe(LoadState.RELOADING);
+
+        await reloadPromise;
+
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+
+      it('tracks reloading of reloadable parent', async () => {
+        const parentLoad = jest
+          .fn()
+          .mockResolvedValueOnce('first load')
+          .mockResolvedValueOnce('second load');
+        const myParent = asyncReadable('initial', parentLoad, {
+          reloadable: true,
+        });
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          ($myParent) => Promise.resolve(`derived from ${$myParent}`),
+          { trackState: true }
+        );
+
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('derived from first load');
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        const reloadPromise = myStore.reload();
+
+        expect(get(myStore)).toBe('derived from first load');
+        expect(get(myState)).toBe(LoadState.RELOADING);
+
+        await reloadPromise;
+
+        expect(get(myStore)).toBe('derived from second load');
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+
+      it('tracks reloading of reloadable parent when no change', async () => {
+        const parentLoad = jest.fn().mockResolvedValue('load');
+        const myParent = asyncReadable('initial', parentLoad, {
+          reloadable: true,
+        });
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          ($myParent) => Promise.resolve(`derived from ${$myParent}`),
+          { trackState: true }
+        );
+
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('derived from load');
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        const reloadPromise = myStore.reload();
+
+        expect(get(myStore)).toBe('derived from load');
+        expect(get(myState)).toBe(LoadState.RELOADING);
+
+        await reloadPromise;
+
+        expect(get(myStore)).toBe('derived from load');
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+
+      it('tracks automatic reloading when parent change', async () => {
+        const myParent = writable('initial');
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          ($myParent) =>
+            new Promise((resolve) =>
+              setTimeout(() => resolve(`derived from ${$myParent}`), 50)
+            ),
+          { trackState: true }
+        );
+
+        myStore.subscribe(jest.fn());
+
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('derived from initial');
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        myParent.set('updated');
+        await new Promise((resolve) => setTimeout(resolve));
+
+        expect(get(myStore)).toBe('derived from initial');
+        expect(get(myState)).toBe(LoadState.RELOADING);
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('derived from updated');
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+    });
+
+    describe('ERROR state', () => {
+      it('tracks error of loadable', async () => {
+        const { store: myStore, state: myState } = asyncReadable(
+          'initial',
+          () => Promise.reject('error'),
+          { trackState: true }
+        );
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await safeLoad(myStore);
+
+        expect(get(myState)).toBe(LoadState.ERROR);
+      });
+
+      it('tracks error during reload', async () => {
+        const load = jest
+          .fn()
+          .mockResolvedValueOnce('success')
+          .mockRejectedValueOnce('failure');
+        const { store: myStore, state: myState } = asyncReadable(
+          'initial',
+          load,
+          { trackState: true, reloadable: true }
+        );
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await safeLoad(myStore);
+
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        await myStore.reload().catch(jest.fn());
+
+        expect(get(myState)).toBe(LoadState.ERROR);
+      });
+
+      it('tracks error during parent load', async () => {
+        const parentLoad = jest
+          .fn()
+          .mockResolvedValueOnce('success')
+          .mockRejectedValueOnce('failure');
+        const myParent = asyncReadable('initial', parentLoad, {
+          reloadable: true,
+        });
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          ($myParent) => Promise.resolve(`derived from ${$myParent}`),
+          { trackState: true }
+        );
+
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await safeLoad(myStore);
+
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        await myStore.reload().catch(jest.fn());
+
+        expect(get(myState)).toBe(LoadState.ERROR);
+      });
+    });
+
+    describe('WRITING state', () => {
+      it('tracks writing', async () => {
+        const { store: myStore, state: myState } = asyncWritable(
+          [],
+          () => Promise.resolve('loaded value'),
+          () => Promise.resolve('final value'),
+          { trackState: true }
+        );
+
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        const setPromise = myStore.set('intermediate value');
+
+        expect(get(myState)).toBe(LoadState.WRITING);
+
+        await setPromise;
+
+        expect(get(myState)).toBe(LoadState.LOADED);
+      });
+
+      it('tracks writing error', async () => {
+        const { store: myStore, state: myState } = asyncWritable(
+          [],
+          () => Promise.resolve('loaded value'),
+          () => Promise.reject('rejection'),
+          { trackState: true }
+        );
+
+        expect(get(myState)).toBe(LoadState.LOADING);
+
+        await myStore.load();
+
+        expect(get(myState)).toBe(LoadState.LOADED);
+
+        const setPromise = myStore.set('intermediate value');
+
+        expect(get(myState)).toBe(LoadState.WRITING);
+
+        await setPromise.catch(jest.fn());
+
+        expect(get(myState)).toBe(LoadState.ERROR);
+      });
     });
   });
 });

@@ -258,9 +258,47 @@ const hasDismissedTooltip = persisted(
 );
 ```
 
-In this example we assume a setup where a user's consentLevels are accessible through the window object. We would like to track the dismissal of a tooltip and ideally persist that across page loads. To do so we set up a `hasDismissedTooltip` store that can bet set like any other writable store. If the user has consented to the `TRACKING` consent level, then setting the store will also set a `TOOLTIP_DISMISSED` cookie. Otherwise no data will be persisted and the store will initialize to the default value `false` on each page load.
+Here we hypothesize a setup where a user's consentLevels are accessible through the window object. We would like to track the dismissal of a tooltip and ideally persist that across page loads. To do so we set up a `hasDismissedTooltip` store that can bet set like any other writable store. If the user has consented to the `TRACKING` consent level, then setting the store will also set a `TOOLTIP_DISMISSED` cookie. Otherwise no data will be persisted and the store will initialize to the default value `false` on each page load.
 
 Note that if no consent level is provided, `undefined` will be passed to the consent checker. This can be handled to provide a default consent for your persisted stores when a consent level is not provided.
+
+### state (BETA)
+
+State stores are a kind of non-Loadable Readable store that can be generated alongside async stores in order to track their load state. This can be done by passing the `trackState` to the store options during creation. This is particular useful for reloadable or asyncDerived stores which might go into a state of pulling new data.
+
+*State stores can be used to conditionally render our data...*
+
+```javascript
+<script>
+  let searchInput;
+  const searchTerms = writable();
+  const {store: searchResults, state: searchState} = asyncDerived(
+    searchTerms,
+    async ($searchTerms) => {
+      const response = await search($searchTerms);
+      return response.results;
+    },
+    { trackState: true }
+  )
+</script>
+  <input bind:value={searchInput}>
+  <button on:click={() => searchTerms.set(searchInput)}>search</button>
+  {#if $searchState === LoadState.LOADING}
+    <SearchTips />
+  {:else if $searchState === LoadState.LOADED}
+    <SearchResults results={$searchResults} />
+  {:else if $searchState === LoadState.RELOADING }
+    <ActivityIcon />
+    <SearchResults results={$searchResults} />
+  {:else if $searchState === LoadState.ERROR }
+    <SearchError />
+  {/if}
+<input >
+```
+
+We are able to easily track the current activity of our search flow using `trackState`. Our `searchState` will initialize to `LOADING`. When the `searchTerms` store is first set it will `load`, which will kick off `searchTerms` own loading process. After that completes searchState will update to `LOADED`. Any further changes to `searchTerms` will kick off a new load process, at which point `searchTerms` will update to `RELOADING`.
+
+Note that trackState is (currently) only available on asyncStores -- asyncReadable, asyncWritable, and asyncDerived.
 
 ### asnycClient
 

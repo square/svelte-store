@@ -40,10 +40,19 @@ export const enableStoreTestingMode = (): void => {
 
 // TYPES
 
+export enum LoadState {
+  LOADING = 'LOADING',
+  LOADED = 'LOADED',
+  RELOADING = 'RELOADING',
+  ERROR = 'ERROR',
+  WRITING = 'WRITING',
+}
 export interface Loadable<T> extends Readable<T> {
   load(): Promise<T>;
   reload?(): Promise<T>;
+  state?: Readable<LoadState>;
   flagForReload?(): void;
+  store: Loadable<T>;
 }
 
 export interface Reloadable<T> extends Loadable<T> {
@@ -53,12 +62,14 @@ export interface Reloadable<T> extends Loadable<T> {
 export interface AsyncWritable<T> extends Writable<T> {
   set(value: T, persist?: boolean): Promise<void>;
   update(updater: Updater<T>): Promise<void>;
+  store: AsyncWritable<T>;
 }
 
-export interface WritableLoadable<T> extends AsyncWritable<T>, Loadable<T> {}
+export type WritableLoadable<T> = Loadable<T> & AsyncWritable<T>;
 
 export interface AsyncStoreOptions<T> {
   reloadable?: true;
+  trackState?: true;
   initial?: T;
 }
 
@@ -201,7 +212,9 @@ export const asyncWritable = <S extends Stores, T>(
   ) => Promise<void | T>,
   options: AsyncStoreOptions<T> = {}
 ): WritableLoadable<T> => {
-  const { reloadable, initial } = options;
+  const { reloadable, trackState, initial } = options;
+
+  const loadState = trackState ? vanillaWritable(LoadState.LOADING) : undefined;
 
   let loadedValuesString: string;
   let currentLoadPromise: Promise<T>;
@@ -214,6 +227,7 @@ export const asyncWritable = <S extends Stores, T>(
       if (logError) {
         logError(e);
       }
+      loadState?.set(LoadState.ERROR);
       throw e;
     }
   };
@@ -226,11 +240,13 @@ export const asyncWritable = <S extends Stores, T>(
 
   const thisStore = vanillaWritable(initial, () => {
     loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
+
     const parentUnsubscribers = getStoresArray(stores).map((store) =>
       store.subscribe(() => {
         loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
       })
     );
+
     return () => {
       parentUnsubscribers.map((unsubscriber) => unsubscriber());
     };
@@ -246,6 +262,7 @@ export const asyncWritable = <S extends Stores, T>(
       await loadParentStores;
     } catch {
       currentLoadPromise = loadParentStores as Promise<T>;
+      loadState?.set(LoadState.ERROR);
       return currentLoadPromise;
     }
 
@@ -262,6 +279,9 @@ export const asyncWritable = <S extends Stores, T>(
       const newValuesString = JSON.stringify(storeValues);
       if (newValuesString === loadedValuesString && !forceReload) {
         // no change, don't generate new promise
+        if (get(loadState) === LoadState.RELOADING) {
+          loadState?.set(LoadState.LOADED);
+        }
         return currentLoadPromise;
       }
       loadedValuesString = newValuesString;
@@ -276,8 +296,15 @@ export const asyncWritable = <S extends Stores, T>(
     const loadInput = Array.isArray(stores) ? storeValues : storeValues[0];
 
     const loadAndSet = async () => {
+      if (
+        get(loadState) === LoadState.LOADED ||
+        get(loadState) === LoadState.ERROR
+      ) {
+        loadState?.set(LoadState.RELOADING);
+      }
       const finalValue = await tryLoad(loadInput);
       thisStore.set(finalValue);
+      loadState?.set(LoadState.LOADED);
       return finalValue;
     };
 
@@ -289,7 +316,8 @@ export const asyncWritable = <S extends Stores, T>(
     updater: Updater<T>,
     persist?: boolean
   ) => {
-    let oldValue;
+    loadState?.set(LoadState.WRITING);
+    let oldValue: T;
     try {
       oldValue = await loadDependenciesThenSet(loadAll);
     } catch {
@@ -302,19 +330,28 @@ export const asyncWritable = <S extends Stores, T>(
     thisStore.set(newValue);
 
     if (mappingWriteFunction && persist) {
-      const parentValues = await loadAll(stores);
+      try {
+        const parentValues = await loadAll(stores);
 
-      const writeResponse = (await mappingWriteFunction(
-        newValue,
-        parentValues,
-        oldValue
-      )) as T;
+        const writeResponse = (await mappingWriteFunction(
+          newValue,
+          parentValues,
+          oldValue
+        )) as T;
 
-      if (writeResponse !== undefined) {
-        thisStore.set(writeResponse);
-        currentLoadPromise = currentLoadPromise.then(() => writeResponse);
+        if (writeResponse !== undefined) {
+          thisStore.set(writeResponse);
+          currentLoadPromise = currentLoadPromise.then(() => writeResponse);
+        }
+      } catch (e) {
+        if (logError) {
+          logError(e);
+        }
+        loadState?.set(LoadState.ERROR);
+        throw e;
       }
     }
+    loadState?.set(LoadState.LOADED);
   };
 
   // required properties
@@ -325,20 +362,28 @@ export const asyncWritable = <S extends Stores, T>(
     setStoreValueThenWrite(updater, persist);
   const load = () => loadDependenciesThenSet(loadAll);
 
-  // optional properties
+  // // optional properties
   const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
   const reload = hasReloadFunction
-    ? () => loadDependenciesThenSet(reloadAll, reloadable)
+    ? () => {
+        loadState?.set(LoadState.RELOADING);
+        return loadDependenciesThenSet(reloadAll, reloadable);
+      }
     : undefined;
 
+  const state = loadState ? { subscribe: loadState.subscribe } : undefined;
   const flagForReload = testingMode ? () => (forceReload = true) : undefined;
 
   return {
+    get store() {
+      return this;
+    },
     subscribe,
     set,
     update,
     load,
     ...(reload && { reload }),
+    ...(state && { state }),
     ...(flagForReload && { flagForReload }),
   };
 };
@@ -362,17 +407,15 @@ export const asyncDerived = <S extends Stores, T>(
   mappingLoadFunction: (values: StoresValues<S>) => Promise<T>,
   options?: AsyncStoreOptions<T>
 ): Loadable<T> => {
-  const { subscribe, load, reload, flagForReload } = asyncWritable(
-    stores,
-    mappingLoadFunction,
-    undefined,
-    options
-  );
+  const { store, subscribe, load, reload, state, flagForReload } =
+    asyncWritable(stores, mappingLoadFunction, undefined, options);
 
   return {
+    store,
     subscribe,
     load,
     ...(reload && { reload }),
+    ...(state && { state }),
     ...(flagForReload && { flagForReload }),
   };
 };
@@ -414,7 +457,8 @@ type SubscribeMapper<S extends Stores, T> = (
 export function derived<S extends Stores, T>(
   stores: S,
   fn: SubscribeMapper<S, T>,
-  initialValue?: T
+  initialValue?: T,
+  options?: Pick<AsyncStoreOptions<T>, 'trackState'>
 ): Loadable<T>;
 
 /**
@@ -429,7 +473,8 @@ export function derived<S extends Stores, T>(
 export function derived<S extends Stores, T>(
   stores: S,
   mappingFunction: DerivedMapper<S, T>,
-  initialValue?: T
+  initialValue?: T,
+  options?: Pick<AsyncStoreOptions<T>, 'trackState'>
 ): Loadable<T>;
 
 // eslint-disable-next-line func-style
@@ -445,6 +490,9 @@ export function derived<S extends Stores, T>(
     : undefined;
 
   return {
+    get store() {
+      return this;
+    },
     ...thisStore,
     load,
     ...(reload && { reload }),
@@ -518,6 +566,9 @@ export const writable = <T>(
     set,
     update,
     load,
+    get store() {
+      return this;
+    },
   };
 };
 
@@ -535,6 +586,9 @@ export const readable = <T>(
   return {
     subscribe,
     load,
+    get store() {
+      return this;
+    },
   };
 };
 
