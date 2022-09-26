@@ -661,7 +661,7 @@ export const persisted = <T>(
   initialOrParent: T | Loadable<T>,
   key: string,
   options: StorageOptions = {}
-): Writable<T> & Loadable<T> => {
+): Writable<T> & Loadable<T> & { resync: () => Promise<T> } => {
   const { reloadable, storageType, consentLevel } = options;
 
   const { getStorageItem, setStorageItem } = getStorageFunctions(
@@ -686,15 +686,31 @@ export const persisted = <T>(
 
   const storageItem = getStorageItem(key);
 
-  if (storageItem) {
-    thisStore.set(JSON.parse(storageItem));
-  } else if (initialOrParent !== undefined) {
-    if (isLoadable(initialOrParent)) {
-      initialOrParent.load().then(($initial) => set($initial));
+  const synchronize = async (): Promise<T> => {
+    if (storageItem) {
+      const stored = JSON.parse(storageItem);
+      thisStore.set(stored);
+      return stored;
+    } else if (initialOrParent !== undefined) {
+      if (isLoadable(initialOrParent)) {
+        const $initial = await initialOrParent.load();
+        set($initial);
+        return $initial;
+      } else {
+        set(initialOrParent);
+        return initialOrParent;
+      }
     } else {
-      set(initialOrParent);
+      if (get(thisStore) !== undefined) {
+        // do not set the store on its first synchronization
+        // this avoids the store prematurely loading
+        thisStore.set(undefined);
+      }
+      return undefined;
     }
-  }
+  };
+
+  synchronize();
 
   const reload = reloadable
     ? async () => {
@@ -716,6 +732,7 @@ export const persisted = <T>(
     set,
     update,
     reload,
+    resync: synchronize,
   };
 };
 

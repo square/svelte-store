@@ -46,7 +46,7 @@ While hydrating your app with data, some endpoints you will only need to access 
 
 ### asyncReadable
 
-An asyncReadable store provides easy asynchronous support to readable stores. Like a readable store, an asyncReadable store takes in an initial value and a function that is called when the store is first subscribed to. For an asyncReadable store this function is an async `loadFunction` which takes no arguments and returns the loaded value of the store. An optional third parameter can specify if the store is Reloadable or not (false by default).
+An asyncReadable store provides easy asynchronous support to readable stores. Like a readable store, an asyncReadable store takes in an initial value and a function that is called when the store is first subscribed to. For an asyncReadable store this function is an async `loadFunction` which takes no arguments and returns the loaded value of the store. An optional third parameter can specify options for the store, in this case declaring it to be reloadable.
 
 *asyncReadable stores are super simple! Let's see it in action...*
 
@@ -58,11 +58,11 @@ const userInfo = asyncReadable(
     const userObject = await response.json();
     return userObject;
   },
-  true
+  {reloadable: true}
 );
 ```
 
-Now we have a Loadable and reloadable userInfo store! As soon as our app renders a component that needs data from userInfo it will begin to load. We can `{#await userInfo.load()}` in our components that need userInfo. This will delay rendering until we have the data we need. Since we have provided `true` as a third argument we can call `userInfo.reload()` to pull new data (and reactively update our components once we have it).
+Now we have a Loadable and reloadable userInfo store! As soon as our app renders a component that needs data from userInfo it will begin to load. We can `{#await userInfo.load()}` in our components that need userInfo. This will delay rendering until we have the data we need. Since we have declared the store to be reloadable we can call `userInfo.reload()` to pull new data (and reactively update our components once we have it).
 
 ### derived
 
@@ -75,7 +75,7 @@ const userSettings = derived(userInfo, ($userInfo) => $userInfo?.settings);
 const darkMode = derived(userSettings, ($userSetting) => $userSettings?.darkMode);
 ```
 
-Now we've got a darkMode store that tracks whether our user has selected darkMode for our app. When we use this store in a component we can call `darkMode.load()`. This awaits userSettings loading, which in turn awaits userInfo. In this way, we can load a derived store to automatically load the sources of its data and to wait for its final value. What's more, since darkMode derives froma reloadable source, we can call `darkMode.reload()` to get new userInfo if we encounter a situation where the user's darkMode setting may have changed.
+Now we've got a darkMode store that tracks whether our user has selected darkMode for our app. When we use this store in a component we can call `darkMode.load()`. This awaits userSettings loading, which in turn awaits userInfo. In this way, we can load a derived store to automatically load the sources of its data and to wait for its final value. What's more, since darkMode derives from a reloadable source, we can call `darkMode.reload()` to get new userInfo if we encounter a situation where the user's darkMode setting may have changed.
 
 This isn't very impressive with our simple example, but as we build out our app and encounter situations where derived values come fom multiple endpoints through several layers of derivations this becomes much more useful. Being able to call load and reload on just the data you need is much more convenient than tracking down all of the dependencies involved!
 
@@ -170,8 +170,8 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 
 ```javascript
 <script>
-  const hasConsent = actionWritable((set) => {
-    const setConsent = set(true);
+  const hasConsent = writable((set) => {
+    const setConsent = () => set(true);
     addEventListener('CONSENT_EVENT', setConsent);
 
     return () => removeEventListener('CONSENT_EVENT', setConsent);  
@@ -198,9 +198,9 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 {/await}
 ```
 
-### persisted
+### persisted (BETA)
 
-Sometimes data needs to persist outside the lifecycle of our app. We can use persisted stores to accomplish this and will gain all of the other benefits of Loadable stores. A persisted store synchronizes store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
+Sometimes data needs to persist outside the lifecycle of our app. By using persisted stores you can accomplish this while gaining all of the other benefits of Loadable stores. A persisted store synchronizes (stringifiable) store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
 
 *We can persist a user name across page loads...*
 
@@ -214,7 +214,7 @@ Sometimes data needs to persist outside the lifecycle of our app. We can use per
 <input bind:value={$userName}>
 ```
 
-If data isn't already in storage, it may need to be fetched asynchronously. In this case we can pass a Loadable store to our persisted store in place of an initial value. Doing so will load the Loadable store if no storage item is found and then synchronize the persisted store and storage with the loaded value. We can also declare the persisted store to be reloadable, in which case a call to `reload()` will attempt to reload the provided Loadable store and persist the new data to storage.
+If data isn't already in storage, it may need to be fetched asynchronously. In this case we can pass a Loadable store to our persisted store in place of an initial value. Doing so will load the Loadable store if no storage item is found and then synchronize the persisted store and storage with the loaded value. We can also declare the persisted store to be reloadable, in which case a call to `.reload()` will attempt to reload the parent Loadable store and persist the new data to storage.
 
 *Persisting remote data is simple...*
 
@@ -236,6 +236,8 @@ const sessionToken = persisted(
 ```
 
 With this setup we can persist our remote data across a page session! The first page load of the session will load from the remote source, but successive page loads will use the persisted token in session storage. What's more is that because Loadable stores are lazily loaded, `remoteSessionToken` will only fetch remote data when its needed for `sessionToken` (provided there are no other subscribers to `remoteSessionToken`). If our session token ever expires we can force new data to be loaded by calling `sessionToken.reload()`!
+
+If an external source updates the storage item of the persisted store the two values will go out of sync. In such a case we can call `.resync()` on the store in order to update the store the *parsed* value of the storage item.
 
 #### persisted configuration / consent
 
@@ -300,7 +302,7 @@ We are able to easily track the current activity of our search flow using `track
 
 Note that trackState is (currently) only available on asyncStores -- asyncReadable, asyncWritable, and asyncDerived.
 
-### asnycClient
+### asnycClient (BETA)
 
 An asyncClient is a special kind of store that expands the functionality of another Loadable store. Creating an asyncClient allows you to start accessing the propeties of the object in your store before it has loaded. This is done by transforming all of the object's properties into asynchronous functions that will resolve when the store has loaded.
 
