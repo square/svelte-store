@@ -93,10 +93,10 @@ const getStoresArray = (stores: Stores): Readable<unknown>[] => {
 };
 
 export const isLoadable = <T>(object: unknown): object is Loadable<T> =>
-  Object.prototype.hasOwnProperty.call(object, 'load');
+  object ? Object.prototype.hasOwnProperty.call(object, 'load') : false;
 
 export const isReloadable = <T>(object: unknown): object is Reloadable<T> =>
-  Object.prototype.hasOwnProperty.call(object, 'reload');
+  object ? Object.prototype.hasOwnProperty.call(object, 'reload') : false;
 
 export const anyLoadable = (stores: Stores): boolean =>
   getStoresArray(stores).some(isLoadable);
@@ -606,6 +606,13 @@ export type StorageOptions = {
   consentLevel?: unknown;
 };
 
+interface Syncable<T> {
+  resync: () => Promise<T>;
+  store: Syncable<T>;
+}
+
+export type Persisted<T> = WritableLoadable<T> & Syncable<T>;
+
 type GetStorageItem = (key: string, consentLevel?: unknown) => string | null;
 type SetStorageItem = (
   key: string,
@@ -651,54 +658,55 @@ export const configurePersistedConsent = (
  * the corresponding storage item if found, otherwise it will use the provided initial
  * value and persist that value in storage. Any changes to the value of this store will
  * be persisted in storage.
- * @param initialOrParent The value to initialize to when used when a corresponding storage
+ * @param initial The value to initialize to when used when a corresponding storage
  * item is not found. If a Loadable store is provided the store will be loaded and its value
  * used in this case.
  * @param key The key of the storage item to synchronize.
  * @param options Modifiers for store behavior.
  */
 export const persisted = <T>(
-  initialOrParent: T | Loadable<T>,
-  key: string,
+  initial: T | Loadable<T>,
+  key: string | Promise<string>,
   options: StorageOptions = {}
-): Writable<T> & Loadable<T> & { resync: () => Promise<T> } => {
+): Persisted<T> => {
   const { reloadable, storageType, consentLevel } = options;
 
   const { getStorageItem, setStorageItem } = getStorageFunctions(
     storageType || StorageType.LOCAL_STORAGE
   );
 
+  const getKey = Promise.resolve(key);
+
   const thisStore = writable<T>();
 
-  const set = (value: T) => {
+  const setAndPersist = async (value: T) => {
     // check consent if checker provided
-    // if checker provided but not consentLevel, default to no consent
-    if (!checkConsent || (consentLevel && checkConsent(consentLevel))) {
-      setStorageItem(key, JSON.stringify(value), consentLevel);
+    if (!checkConsent || checkConsent(consentLevel)) {
+      const storageKey = await getKey;
+      setStorageItem(storageKey, JSON.stringify(value), consentLevel);
     }
     thisStore.set(value);
   };
 
-  const update = (updater: Updater<T>) => {
-    const newValue = updater(get(thisStore));
-    set(newValue);
-  };
-
-  const storageItem = getStorageItem(key);
-
   const synchronize = async (): Promise<T> => {
+    const storageKey = await getKey;
+    const storageItem = getStorageItem(storageKey);
+
     if (storageItem) {
       const stored = JSON.parse(storageItem);
       thisStore.set(stored);
+
       return stored;
-    } else if (initialOrParent !== undefined) {
-      if (isLoadable(initialOrParent)) {
-        const $initial = await initialOrParent.load();
-        set($initial);
+    } else if (initial !== undefined) {
+      if (isLoadable(initial)) {
+        const $initial = await initial.load();
+        await setAndPersist($initial);
+
         return $initial;
       } else {
-        set(initialOrParent);
-        return initialOrParent;
+        setAndPersist(initial);
+
+        return initial;
       }
     } else {
       if (get(thisStore) !== undefined) {
@@ -710,29 +718,43 @@ export const persisted = <T>(
     }
   };
 
-  synchronize();
+  const initialSync = synchronize();
+
+  const set = async (value: T) => {
+    await initialSync;
+    return setAndPersist(value);
+  };
+
+  const update = async (updater: Updater<T>) => {
+    await initialSync;
+    const newValue = updater(get(thisStore));
+    await setAndPersist(newValue);
+  };
 
   const reload = reloadable
     ? async () => {
         let newValue: T;
 
-        if (isLoadable(initialOrParent)) {
-          [newValue] = await reloadAll([initialOrParent]);
+        if (isLoadable(initial)) {
+          [newValue] = await reloadAll([initial]);
         } else {
-          newValue = initialOrParent;
+          newValue = initial;
         }
 
-        set(newValue);
+        setAndPersist(newValue);
         return newValue;
       }
     : undefined;
 
   return {
     ...thisStore,
+    get store() {
+      return this;
+    },
     set,
     update,
-    reload,
     resync: synchronize,
+    ...(reload && { reload }),
   };
 };
 

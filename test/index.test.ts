@@ -923,37 +923,41 @@ describe('readable/writable stores', () => {
         });
 
         describe('using initial values', () => {
-          it('writes default to storage', () => {
+          it('writes default to storage', async () => {
             const myStorage = persisted('default', 'key', { storageType });
+
+            await myStorage.load();
 
             expect(JSON.parse(getStorage('key'))).toBe('default');
             expect(get(myStorage)).toBe('default');
             expect(myStorage.load()).resolves.toBe('default');
           });
 
-          it('uses stored value if present', () => {
+          it('uses stored value if present', async () => {
             setStorage('key', JSON.stringify('already set'));
             const myStorage = persisted('default', 'key', { storageType });
+
+            await myStorage.load();
 
             expect(JSON.parse(getStorage('key'))).toBe('already set');
             expect(get(myStorage)).toBe('already set');
             expect(myStorage.load()).resolves.toBe('already set');
           });
 
-          it('updates stored value when set', () => {
+          it('updates stored value when set', async () => {
             setStorage('key', JSON.stringify('already set'));
             const myStorage = persisted('default', 'key', { storageType });
-            myStorage.set('new value');
+            await myStorage.set('new value');
 
             expect(JSON.parse(getStorage('key'))).toBe('new value');
             expect(get(myStorage)).toBe('new value');
             expect(myStorage.load()).resolves.toBe('new value');
           });
 
-          it('updates stored value when updated', () => {
+          it('updates stored value when updated', async () => {
             setStorage('key', JSON.stringify('already set'));
             const myStorage = persisted('default', 'key', { storageType });
-            myStorage.update((oldValue) => `${oldValue} + new value`);
+            await myStorage.update((oldValue) => `${oldValue} + new value`);
 
             expect(JSON.parse(getStorage('key'))).toBe(
               'already set + new value'
@@ -982,12 +986,28 @@ describe('readable/writable stores', () => {
             expect(myStorage.load()).resolves.toBe('new value');
           });
 
+          it('loads using null value', async () => {
+            const myStorage = persisted(null, 'key', { storageType });
+
+            await myStorage.load();
+            expect(get(myStorage)).toBe(null);
+            expect(JSON.parse(getStorage('key'))).toBe(null);
+
+            await myStorage.set('new value');
+
+            expect(JSON.parse(getStorage('key'))).toBe('new value');
+            expect(get(myStorage)).toBe('new value');
+            expect(myStorage.load()).resolves.toBe('new value');
+          });
+
           it('reloads to default', async () => {
             setStorage('key', JSON.stringify('already set'));
             const myStorage = persisted('default', 'key', {
               storageType,
               reloadable: true,
             });
+
+            await myStorage.load();
 
             expect(JSON.parse(getStorage('key'))).toBe('already set');
             expect(get(myStorage)).toBe('already set');
@@ -1001,7 +1021,7 @@ describe('readable/writable stores', () => {
           });
         });
 
-        describe('using Loadable default', () => {
+        describe('using Loadable initial', () => {
           it('writes default to storage', async () => {
             const myStorage = persisted(readable('default'), 'key', {
               storageType,
@@ -1063,6 +1083,8 @@ describe('readable/writable stores', () => {
               reloadable: true,
             });
 
+            await myStorage.load();
+
             expect(JSON.parse(getStorage('key'))).toBe('already set');
             expect(get(myStorage)).toBe('already set');
             expect(myStorage.load()).resolves.toBe('already set');
@@ -1103,12 +1125,107 @@ describe('readable/writable stores', () => {
           });
         });
 
+        describe('using async key', () => {
+          it('writes default to storage', async () => {
+            const myStorage = persisted('default', Promise.resolve('key'), {
+              storageType,
+            });
+
+            await myStorage.load();
+
+            expect(JSON.parse(getStorage('key'))).toBe('default');
+            expect(get(myStorage)).toBe('default');
+            expect(myStorage.load()).resolves.toBe('default');
+          });
+
+          it('uses stored value if present', async () => {
+            setStorage('key', JSON.stringify('already set'));
+            const myStorage = persisted('default', Promise.resolve('key'), {
+              storageType,
+            });
+
+            await myStorage.load();
+
+            expect(JSON.parse(getStorage('key'))).toBe('already set');
+            expect(get(myStorage)).toBe('already set');
+            expect(myStorage.load()).resolves.toBe('already set');
+          });
+
+          it('updates stored value when set', async () => {
+            setStorage('key', JSON.stringify('already set'));
+            const myStorage = persisted('default', Promise.resolve('key'), {
+              storageType,
+            });
+            await myStorage.set('new value');
+
+            expect(JSON.parse(getStorage('key'))).toBe('new value');
+            expect(get(myStorage)).toBe('new value');
+            expect(myStorage.load()).resolves.toBe('new value');
+          });
+
+          it('updates stored value when updated', async () => {
+            setStorage('key', JSON.stringify('already set'));
+            const myStorage = persisted('default', Promise.resolve('key'), {
+              storageType,
+            });
+            await myStorage.update((oldValue) => `${oldValue} + new value`);
+
+            expect(JSON.parse(getStorage('key'))).toBe(
+              'already set + new value'
+            );
+            expect(get(myStorage)).toBe('already set + new value');
+            expect(myStorage.load()).resolves.toBe('already set + new value');
+          });
+
+          it('does not load until set', async () => {
+            let isResolved = false;
+            const myStorage = persisted(undefined, Promise.resolve('key'), {
+              storageType,
+            });
+            const resolutionPromise = myStorage
+              .load()
+              .then(() => (isResolved = true));
+
+            expect(get(myStorage)).toBe(undefined);
+            expect(isResolved).toBe(false);
+            expect(getStorage('key')).toBeFalsy();
+
+            myStorage.set('new value');
+
+            await resolutionPromise;
+            expect(isResolved).toBe(true);
+            expect(JSON.parse(getStorage('key'))).toBe('new value');
+            expect(get(myStorage)).toBe('new value');
+            expect(myStorage.load()).resolves.toBe('new value');
+          });
+
+          it('reloads to default', async () => {
+            setStorage('key', JSON.stringify('already set'));
+            const myStorage = persisted('default', Promise.resolve('key'), {
+              storageType,
+              reloadable: true,
+            });
+
+            await myStorage.load();
+
+            expect(JSON.parse(getStorage('key'))).toBe('already set');
+            expect(get(myStorage)).toBe('already set');
+            expect(myStorage.load()).resolves.toBe('already set');
+
+            await myStorage.reload();
+
+            expect(JSON.parse(getStorage('key'))).toBe('default');
+            expect(get(myStorage)).toBe('default');
+            expect(myStorage.load()).resolves.toBe('default');
+          });
+        });
+
         describe('consent configuration', () => {
           afterEach(() => {
             configurePersistedConsent(undefined);
           });
 
-          it('persists data if consent check passes', () => {
+          it('persists data if consent check passes', async () => {
             configurePersistedConsent(
               (consentLevel) => consentLevel === 'CONSENT'
             );
@@ -1117,18 +1234,20 @@ describe('readable/writable stores', () => {
               consentLevel: 'CONSENT',
             });
 
+            await myStorage.load();
+
             expect(JSON.parse(getStorage('key'))).toBe('default');
             expect(get(myStorage)).toBe('default');
             expect(myStorage.load()).resolves.toBe('default');
 
-            myStorage.set('updated');
+            await myStorage.set('updated');
 
             expect(JSON.parse(getStorage('key'))).toBe('updated');
             expect(get(myStorage)).toBe('updated');
             expect(myStorage.load()).resolves.toBe('updated');
           });
 
-          it('does not persist data if consent check fails', () => {
+          it('does not persist data if consent check fails', async () => {
             configurePersistedConsent(
               (consentLevel) => consentLevel === 'CONSENT'
             );
@@ -1137,18 +1256,20 @@ describe('readable/writable stores', () => {
               consentLevel: 'NO_CONSENT',
             });
 
+            await myStorage.load();
+
             expect(getStorage('key')).toBeNull();
             expect(get(myStorage)).toBe('default');
             expect(myStorage.load()).resolves.toBe('default');
 
-            myStorage.set('updated');
+            await myStorage.set('updated');
 
             expect(getStorage('key')).toBe(null);
             expect(get(myStorage)).toBe('updated');
             expect(myStorage.load()).resolves.toBe('updated');
           });
 
-          it('does not persist data if no consent level given', () => {
+          it('does not persist data if no consent level given', async () => {
             configurePersistedConsent(
               (consentLevel) => consentLevel === 'CONSENT'
             );
@@ -1156,11 +1277,13 @@ describe('readable/writable stores', () => {
               storageType,
             });
 
+            await myStorage.load();
+
             expect(getStorage('key')).toBeNull();
             expect(get(myStorage)).toBe('default');
             expect(myStorage.load()).resolves.toBe('default');
 
-            myStorage.set('updated');
+            await myStorage.set('updated');
 
             expect(getStorage('key')).toBe(null);
             expect(get(myStorage)).toBe('updated');
