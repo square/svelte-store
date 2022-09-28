@@ -607,7 +607,7 @@ export type StorageOptions = {
 };
 
 interface Syncable<T> {
-  resync: () => Promise<T>;
+  resync: (newKey?: string | Promise<string>) => Promise<T>;
   store: Syncable<T>;
 }
 
@@ -675,7 +675,7 @@ export const persisted = <T>(
     storageType || StorageType.LOCAL_STORAGE
   );
 
-  const getKey = Promise.resolve(key);
+  let getKey = Promise.resolve(key);
 
   const thisStore = writable<T>();
 
@@ -689,6 +689,9 @@ export const persisted = <T>(
   };
 
   const synchronize = async (): Promise<T> => {
+    if (getKey) {
+      getKey = Promise.resolve(getKey);
+    }
     const storageKey = await getKey;
     const storageItem = getStorageItem(storageKey);
 
@@ -704,7 +707,7 @@ export const persisted = <T>(
 
         return $initial;
       } else {
-        setAndPersist(initial);
+        await setAndPersist(initial);
 
         return initial;
       }
@@ -718,15 +721,15 @@ export const persisted = <T>(
     }
   };
 
-  const initialSync = synchronize();
+  const initalSync = synchronize();
 
   const set = async (value: T) => {
-    await initialSync;
+    await initalSync;
     return setAndPersist(value);
   };
 
   const update = async (updater: Updater<T>) => {
-    await initialSync;
+    await initalSync;
     const newValue = updater(get(thisStore));
     await setAndPersist(newValue);
   };
@@ -746,6 +749,14 @@ export const persisted = <T>(
       }
     : undefined;
 
+  const resync = async (newKey?: string | Promise<string>): Promise<T> => {
+    await initalSync;
+    if (newKey) {
+      getKey = Promise.resolve(newKey);
+    }
+    return synchronize();
+  };
+
   return {
     ...thisStore,
     get store() {
@@ -753,7 +764,7 @@ export const persisted = <T>(
     },
     set,
     update,
-    resync: synchronize,
+    resync,
     ...(reload && { reload }),
   };
 };
