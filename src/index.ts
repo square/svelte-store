@@ -110,7 +110,19 @@ const loadDependencies = <S extends Stores, T>(
   stores: S
 ): (() => Promise<T>) => {
   return async () => {
-    await loadFunction(stores);
+    // Create a dummy subscription when we load the store.
+    // This ensures that we will have at least one subscriber when
+    // loading the store so that our start function will run.
+    const dummyUnsubscribe = thisStore.subscribe(() => {
+      /* no-op */
+    });
+    try {
+      await loadFunction(stores);
+    } catch (error) {
+      dummyUnsubscribe();
+      throw error;
+    }
+    dummyUnsubscribe();
     return get(thisStore);
   };
 };
@@ -457,8 +469,7 @@ type SubscribeMapper<S extends Stores, T> = (
 export function derived<S extends Stores, T>(
   stores: S,
   fn: SubscribeMapper<S, T>,
-  initialValue?: T,
-  options?: Pick<AsyncStoreOptions<T>, 'trackState'>
+  initialValue?: T
 ): Loadable<T>;
 
 /**
@@ -473,8 +484,7 @@ export function derived<S extends Stores, T>(
 export function derived<S extends Stores, T>(
   stores: S,
   mappingFunction: DerivedMapper<S, T>,
-  initialValue?: T,
-  options?: Pick<AsyncStoreOptions<T>, 'trackState'>
+  initialValue?: T
 ): Loadable<T>;
 
 // eslint-disable-next-line func-style
@@ -508,67 +518,80 @@ export const writable = <T>(
   value?: T,
   start?: StartStopNotifier<T>
 ): Writable<T> & Loadable<T> => {
+  let hasEverLoaded = false;
+
   let resolveLoadPromise: (value: T | PromiseLike<T>) => void;
+
   let loadPromise: Promise<T> = new Promise((resolve) => {
-    resolveLoadPromise = resolve;
-  });
-
-  let dummyUnsubscribe: Unsubscriber;
-
-  const resolve = (value: T) => {
-    resolveLoadPromise(value);
-    loadPromise = Promise.resolve(value);
-    if (dummyUnsubscribe) {
-      // cleanup our dummy subscription from loading
-      dummyUnsubscribe();
-      dummyUnsubscribe = undefined;
-    }
-  };
-
-  const startAndLoad: StartStopNotifier<T> = (vanillaSet: Subscriber<T>) => {
-    const customSet = (value: T) => {
-      vanillaSet(value);
+    resolveLoadPromise = (value: T | PromiseLike<T>) => {
+      hasEverLoaded = true;
       resolve(value);
     };
+  });
+
+  const updateLoadPromise = (value: T) => {
+    if (value === undefined && !hasEverLoaded) {
+      // don't resolve until we get a defined value
+      return;
+    }
+    resolveLoadPromise(value);
+    loadPromise = Promise.resolve(value);
+  };
+
+  const startFunction: StartStopNotifier<T> = (set: Subscriber<T>) => {
+    const customSet = (value: T) => {
+      set(value);
+      updateLoadPromise(value);
+    };
+    // intercept the `set` function being passed to the provided start function
+    // instead provide our own `set` which also updates the load promise.
     return start(customSet);
   };
 
-  const thisStore = vanillaWritable(value, start && startAndLoad);
+  const thisStore = vanillaWritable(value, start && startFunction);
 
-  const load = () => {
-    if (!dummyUnsubscribe) {
-      // Create a dummy subscription when we load the store.
-      // This ensures that we will have at least one subscriber when
-      // loading the store so that our start function will run.
-      dummyUnsubscribe = thisStore.subscribe(() => {
-        /* no-op */
-      });
+  const load = async () => {
+    // Create a dummy subscription when we load the store.
+    // This ensures that we will have at least one subscriber when
+    // loading the store so that our start function will run.
+    const dummyUnsubscribe = thisStore.subscribe(() => {
+      /* no-op */
+    });
+    let loadedValue: T;
+    try {
+      loadedValue = await loadPromise;
+    } catch (error) {
+      dummyUnsubscribe();
+      throw error;
     }
-    return loadPromise;
+    dummyUnsubscribe();
+    return loadedValue;
   };
 
   if (value !== undefined) {
-    resolve(value);
+    // immeadietly load stores that are given an initial value
+    updateLoadPromise(value);
   }
 
   const set = (value: T) => {
     thisStore.set(value);
-    resolve(value);
+    updateLoadPromise(value);
   };
+
   const update = (updater: Updater<T>) => {
     const newValue = updater(get(thisStore));
     thisStore.set(newValue);
-    resolve(newValue);
+    updateLoadPromise(newValue);
   };
 
   return {
+    get store() {
+      return this;
+    },
     ...thisStore,
     set,
     update,
     load,
-    get store() {
-      return this;
-    },
   };
 };
 
@@ -607,11 +630,11 @@ export type StorageOptions = {
 };
 
 interface Syncable<T> {
-  resync: (newKey?: string | Promise<string>) => Promise<T>;
+  resync: () => Promise<T>;
   store: Syncable<T>;
 }
 
-export type Persisted<T> = WritableLoadable<T> & Syncable<T>;
+export type Persisted<T> = Syncable<T> & WritableLoadable<T>;
 
 type GetStorageItem = (key: string, consentLevel?: unknown) => string | null;
 type SetStorageItem = (
@@ -642,7 +665,7 @@ const getStorageFunctions = (
   }[type];
 };
 
-type ConsentChecker = (consentLevel: any) => boolean;
+type ConsentChecker = (consentLevel: unknown) => boolean;
 
 let checkConsent: ConsentChecker;
 
@@ -666,7 +689,7 @@ export const configurePersistedConsent = (
  */
 export const persisted = <T>(
   initial: T | Loadable<T>,
-  key: string | Promise<string>,
+  key: string | (() => Promise<string>),
   options: StorageOptions = {}
 ): Persisted<T> => {
   const { reloadable, storageType, consentLevel } = options;
@@ -675,64 +698,68 @@ export const persisted = <T>(
     storageType || StorageType.LOCAL_STORAGE
   );
 
-  let getKey = Promise.resolve(key);
-
-  const thisStore = writable<T>();
-
-  const setAndPersist = async (value: T) => {
-    // check consent if checker provided
-    if (!checkConsent || checkConsent(consentLevel)) {
-      const storageKey = await getKey;
-      setStorageItem(storageKey, JSON.stringify(value), consentLevel);
+  const getKey = () => {
+    if (typeof key === 'function') {
+      return key();
     }
-    thisStore.set(value);
+    return Promise.resolve(key);
   };
 
-  const synchronize = async (): Promise<T> => {
-    if (getKey) {
-      getKey = Promise.resolve(getKey);
+  const setAndPersist = async (value: T, set: Subscriber<T>) => {
+    // check consent if checker provided
+    if (!checkConsent || checkConsent(consentLevel)) {
+      const storageKey = await getKey();
+      setStorageItem(storageKey, JSON.stringify(value), consentLevel);
     }
-    const storageKey = await getKey;
+    set(value);
+  };
+
+  const synchronize = async (set: Subscriber<T>): Promise<T> => {
+    const storageKey = await getKey();
     const storageItem = getStorageItem(storageKey);
 
     if (storageItem) {
       const stored = JSON.parse(storageItem);
-      thisStore.set(stored);
+      set(stored);
 
       return stored;
     } else if (initial !== undefined) {
       if (isLoadable(initial)) {
         const $initial = await initial.load();
-        await setAndPersist($initial);
+        await setAndPersist($initial, set);
 
         return $initial;
       } else {
-        await setAndPersist(initial);
+        await setAndPersist(initial, set);
 
         return initial;
       }
     } else {
-      if (get(thisStore) !== undefined) {
-        // do not set the store on its first synchronization
-        // this avoids the store prematurely loading
-        thisStore.set(undefined);
-      }
+      set(undefined);
       return undefined;
     }
   };
 
-  const initalSync = synchronize();
+  let initialSync: Promise<T>;
+
+  const thisStore = writable<T>(undefined, (set) => {
+    initialSync = synchronize(set);
+  });
+
+  const subscribe = thisStore.subscribe;
 
   const set = async (value: T) => {
-    await initalSync;
-    return setAndPersist(value);
+    await initialSync;
+    return setAndPersist(value, thisStore.set);
   };
 
   const update = async (updater: Updater<T>) => {
-    await initalSync;
+    await (initialSync ?? synchronize(thisStore.set));
     const newValue = updater(get(thisStore));
-    await setAndPersist(newValue);
+    await setAndPersist(newValue, thisStore.set);
   };
+
+  const load = thisStore.load;
 
   const reload = reloadable
     ? async () => {
@@ -744,26 +771,24 @@ export const persisted = <T>(
           newValue = initial;
         }
 
-        setAndPersist(newValue);
+        setAndPersist(newValue, thisStore.set);
         return newValue;
       }
     : undefined;
 
-  const resync = async (newKey?: string | Promise<string>): Promise<T> => {
-    await initalSync;
-    if (newKey) {
-      getKey = Promise.resolve(newKey);
-    }
-    return synchronize();
+  const resync = async (): Promise<T> => {
+    await initialSync;
+    return synchronize(thisStore.set);
   };
 
   return {
-    ...thisStore,
     get store() {
       return this;
     },
+    subscribe,
     set,
     update,
+    load,
     resync,
     ...(reload && { reload }),
   };

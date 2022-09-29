@@ -769,6 +769,24 @@ describe('synchronous derived', () => {
       nonAsyncParent.set('L');
       expect(get(myDerived)).toBe('L');
     });
+
+    it('subscribes when loading', async () => {
+      const myWritable = writable('initial');
+      const myDerived = derived(
+        myWritable,
+        ($myWritable) => `derived from ${$myWritable}`
+      );
+
+      let $myDerived = await myDerived.load();
+
+      expect($myDerived).toBe('derived from initial');
+
+      myWritable.set('updated');
+
+      $myDerived = await myDerived.load();
+
+      expect($myDerived).toBe('derived from updated');
+    });
   });
 });
 
@@ -825,16 +843,16 @@ describe('readable/writable stores', () => {
     });
 
     it('fires unsubscribe callback when unsubscribed', () => {
-      const mockUnsubscribe = jest.fn();
+      const mockStop = jest.fn();
       const myWritable = writable(undefined, (set) => {
         set('initial');
-        return mockUnsubscribe;
+        return mockStop;
       });
       const unsubscribe = myWritable.subscribe(jest.fn());
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      expect(mockStop).not.toHaveBeenCalled();
       unsubscribe();
-      expect(mockUnsubscribe).toHaveBeenCalled();
+      expect(mockStop).toHaveBeenCalled();
     });
   });
 
@@ -896,7 +914,11 @@ describe('readable/writable stores', () => {
       expect(stop).not.toHaveBeenCalled();
       const value = await load;
       expect(value).toBe('value');
-      expect(stop).toHaveBeenCalled();
+      expect(stop).toHaveBeenCalledTimes(1);
+
+      await myReadable.load();
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(stop).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -1127,9 +1149,13 @@ describe('readable/writable stores', () => {
 
         describe('using async key', () => {
           it('writes default to storage', async () => {
-            const myStorage = persisted('default', Promise.resolve('key'), {
-              storageType,
-            });
+            const myStorage = persisted(
+              'default',
+              () => Promise.resolve('key'),
+              {
+                storageType,
+              }
+            );
 
             await myStorage.load();
 
@@ -1140,9 +1166,13 @@ describe('readable/writable stores', () => {
 
           it('uses stored value if present', async () => {
             setStorage('key', JSON.stringify('already set'));
-            const myStorage = persisted('default', Promise.resolve('key'), {
-              storageType,
-            });
+            const myStorage = persisted(
+              'default',
+              () => Promise.resolve('key'),
+              {
+                storageType,
+              }
+            );
 
             await myStorage.load();
 
@@ -1153,9 +1183,13 @@ describe('readable/writable stores', () => {
 
           it('updates stored value when set', async () => {
             setStorage('key', JSON.stringify('already set'));
-            const myStorage = persisted('default', Promise.resolve('key'), {
-              storageType,
-            });
+            const myStorage = persisted(
+              'default',
+              () => Promise.resolve('key'),
+              {
+                storageType,
+              }
+            );
             await myStorage.set('new value');
 
             expect(JSON.parse(getStorage('key'))).toBe('new value');
@@ -1165,9 +1199,13 @@ describe('readable/writable stores', () => {
 
           it('updates stored value when updated', async () => {
             setStorage('key', JSON.stringify('already set'));
-            const myStorage = persisted('default', Promise.resolve('key'), {
-              storageType,
-            });
+            const myStorage = persisted(
+              'default',
+              () => Promise.resolve('key'),
+              {
+                storageType,
+              }
+            );
             await myStorage.update((oldValue) => `${oldValue} + new value`);
 
             expect(JSON.parse(getStorage('key'))).toBe(
@@ -1179,9 +1217,13 @@ describe('readable/writable stores', () => {
 
           it('does not load until set', async () => {
             let isResolved = false;
-            const myStorage = persisted(undefined, Promise.resolve('key'), {
-              storageType,
-            });
+            const myStorage = persisted(
+              undefined,
+              () => Promise.resolve('key'),
+              {
+                storageType,
+              }
+            );
             const resolutionPromise = myStorage
               .load()
               .then(() => (isResolved = true));
@@ -1201,10 +1243,14 @@ describe('readable/writable stores', () => {
 
           it('reloads to default', async () => {
             setStorage('key', JSON.stringify('already set'));
-            const myStorage = persisted('default', Promise.resolve('key'), {
-              storageType,
-              reloadable: true,
-            });
+            const myStorage = persisted(
+              'default',
+              () => Promise.resolve('key'),
+              {
+                storageType,
+                reloadable: true,
+              }
+            );
 
             await myStorage.load();
 
@@ -1323,6 +1369,112 @@ describe('readable/writable stores', () => {
   });
 
   describe('trackState', () => {
+    describe('provides `store` self reference', () => {
+      it('asyncWritable', () => {
+        const { store } = asyncWritable(null, jest.fn(), jest.fn(), {
+          reloadable: true,
+        });
+
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'subscribe')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'load')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'reload')
+        ).toBeTruthy();
+        expect(Object.prototype.hasOwnProperty.call(store, 'set')).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'update')
+        ).toBeTruthy();
+      });
+
+      it('asyncDerived', () => {
+        const { store } = asyncDerived([], jest.fn(), {
+          reloadable: true,
+        });
+
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'subscribe')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'load')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'reload')
+        ).toBeTruthy();
+      });
+
+      it('asyncReadable', () => {
+        const { store } = asyncReadable([], jest.fn(), {
+          reloadable: true,
+        });
+
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'subscribe')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'load')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'reload')
+        ).toBeTruthy();
+      });
+
+      it('derived', () => {
+        const { store } = derived([], jest.fn());
+
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'subscribe')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'load')
+        ).toBeTruthy();
+      });
+
+      it('writable', () => {
+        const { store } = writable();
+
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'subscribe')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'load')
+        ).toBeTruthy();
+        expect(Object.prototype.hasOwnProperty.call(store, 'set')).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'update')
+        ).toBeTruthy();
+      });
+
+      it('readable', () => {
+        const { store } = readable();
+
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'subscribe')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'load')
+        ).toBeTruthy();
+      });
+
+      it('persisted', () => {
+        const { store } = persisted(null, 'key');
+
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'subscribe')
+        ).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'load')
+        ).toBeTruthy();
+        expect(Object.prototype.hasOwnProperty.call(store, 'set')).toBeTruthy();
+        expect(
+          Object.prototype.hasOwnProperty.call(store, 'update')
+        ).toBeTruthy();
+      });
+    });
+
     describe('adds state store when trackState enabled', () => {
       it('works with asyncWritable', async () => {
         const { store: myStore, state: myState } = asyncWritable(
