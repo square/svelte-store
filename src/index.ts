@@ -796,11 +796,13 @@ export const persisted = <T>(
 
 // ASYNC CLIENT
 
-type AsyncClient<T> = {
-  [k in keyof T]: T[k] extends (...args: infer TArgs) => infer TReturn // callable property?
-    ? (...args: TArgs) => Promise<TReturn> // make the function async
-    : () => Promise<T[k]>; // return the property in a Promise
-};
+type AsyncClient<T> = T extends (...args: infer TArgs) => infer TReturn
+  ? (...args: TArgs) => Promise<TReturn>
+  : {
+      [k in keyof T]: T[k] extends (...args: infer KArgs) => infer KReturn // callable property?
+        ? (...args: KArgs) => Promise<KReturn> // make the function async
+        : () => Promise<T[k]>; // return the property in a Promise
+    };
 
 /**
  * Generates an AsyncClient from a Loadable store. The AsyncClient will have all
@@ -815,13 +817,13 @@ type AsyncClient<T> = {
 export const asyncClient = <S extends Loadable<unknown>>(
   loadable: S
 ): S & AsyncClient<StoresValues<S>> => {
-  return new Proxy(loadable, {
-    get: (store, property) => {
-      if (store[property]) {
-        return store[property];
+  return new Proxy(Function.prototype, {
+    get: (_, property) => {
+      if (loadable[property]) {
+        return loadable[property];
       }
       return async (...argumentsList: unknown[]) => {
-        const storeValue = await store.load();
+        const storeValue = await loadable.load();
         const original = storeValue[property];
         if (typeof original === 'function') {
           return Reflect.apply(original, storeValue, argumentsList);
@@ -829,6 +831,13 @@ export const asyncClient = <S extends Loadable<unknown>>(
           return original;
         }
       };
+    },
+    apply: async (_, __, argumentsList) => {
+      const storeValue = await loadable.load();
+      if (typeof storeValue === 'function') {
+        return Reflect.apply(storeValue, storeValue, argumentsList);
+      }
+      return storeValue;
     },
   }) as unknown as S & AsyncClient<StoresValues<S>>;
 };

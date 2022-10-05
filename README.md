@@ -329,8 +329,28 @@ In this example we assume a hypothetical flow where a `LOGGING_READY` event is f
 However, by turning the readable store into an asyncClient we can instead call `logger.logMessage` immeadietly and the message will be logged when the `LOGGING_READY` event fires.
 
 Note that the asyncClient is still a store, and so can perform all of the store functionality of what it wraps. This means, for example, that you can make an asyncClient of a writable store and have access to the `set` and `update` functions.
+
 Non-function properties of the object loaded by the asyncClient can also be accessed using an async function. I.e. if an asyncClient loads to `{foo: 'bar'}`, `myClient.foo()` will resolve to 'bar' when the asyncClient has loaded.
 The property access for an asyncClient is performed dynamically, and that means that *any* property can attempt to be accessed. If the property can not be found when the asyncClient loads, this will resolve to `undefined`. It is recommended to use typescript to ensure that the accessed properties are members of the store's type.
+
+If a store loads directly to a function, an asyncClient can be used to asynchronously invoke that function.
+
+*We can call loaded functions easily...*
+
+```javascript
+const logMessage = asyncClient(readable(
+  undefined,
+  (set) => {
+    addEventListener('LOGGING_READY', () => {
+      set((message) => window.log('INFO', message));
+    })
+  }
+));
+
+logMessage('Logging ready')
+```
+
+Instead of defining a store that holds an object with function properties, we instead have the store hold a function directly. As before, `logMessage` will be called when the `LOGGING_READY` event fires and the store loads.
 
 ## Additional functions
 

@@ -1366,6 +1366,14 @@ describe('readable/writable stores', () => {
       const result = await resultPromise;
       expect(result).toBe('bar');
     });
+
+    it('allows invocation of function stores', async () => {
+      const myClient = asyncClient(writable<(input: string) => string>());
+      const resultPromise = myClient('input');
+      myClient.set((input: string) => `${input} + output`);
+      const result = await resultPromise;
+      expect(result).toBe('input + output');
+    });
   });
 
   describe('trackState', () => {
