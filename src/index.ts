@@ -42,14 +42,13 @@ export const enableStoreTestingMode = (): void => {
 };
 
 // TYPES
+export type LoadState =
+  | 'LOADING'
+  | 'LOADED'
+  | 'RELOADING'
+  | 'ERROR'
+  | 'WRITING';
 
-export enum LoadState {
-  LOADING = 'LOADING',
-  LOADED = 'LOADED',
-  RELOADING = 'RELOADING',
-  ERROR = 'ERROR',
-  WRITING = 'WRITING',
-}
 export interface Loadable<T> extends Readable<T> {
   load(): Promise<T>;
   reload?(): Promise<T>;
@@ -229,7 +228,9 @@ export const asyncWritable = <S extends Stores, T>(
 ): WritableLoadable<T> => {
   const { reloadable, trackState, initial } = options;
 
-  const loadState = trackState ? vanillaWritable(LoadState.LOADING) : undefined;
+  const loadState = trackState
+    ? vanillaWritable<LoadState>('LOADING')
+    : undefined;
 
   let loadedValuesString: string;
   let currentLoadPromise: Promise<T>;
@@ -240,7 +241,7 @@ export const asyncWritable = <S extends Stores, T>(
       if (logError) {
         logError(e);
       }
-      loadState?.set(LoadState.ERROR);
+      loadState?.set('ERROR');
       throw e;
     }
   };
@@ -275,7 +276,7 @@ export const asyncWritable = <S extends Stores, T>(
       await loadParentStores;
     } catch {
       currentLoadPromise = loadParentStores as Promise<T>;
-      loadState?.set(LoadState.ERROR);
+      loadState?.set('ERROR');
       return currentLoadPromise;
     }
 
@@ -287,8 +288,8 @@ export const asyncWritable = <S extends Stores, T>(
       const newValuesString = JSON.stringify(storeValues);
       if (newValuesString === loadedValuesString) {
         // no change, don't generate new promise
-        if (get(loadState) === LoadState.RELOADING) {
-          loadState?.set(LoadState.LOADED);
+        if (get(loadState) === 'RELOADING') {
+          loadState?.set('LOADED');
         }
         return currentLoadPromise;
       }
@@ -299,15 +300,12 @@ export const asyncWritable = <S extends Stores, T>(
     const loadInput = Array.isArray(stores) ? storeValues : storeValues[0];
 
     const loadAndSet = async () => {
-      if (
-        get(loadState) === LoadState.LOADED ||
-        get(loadState) === LoadState.ERROR
-      ) {
-        loadState?.set(LoadState.RELOADING);
+      if (get(loadState) === 'LOADED' || get(loadState) === 'ERROR') {
+        loadState?.set('RELOADING');
       }
       const finalValue = await tryLoad(loadInput);
       thisStore.set(finalValue);
-      loadState?.set(LoadState.LOADED);
+      loadState?.set('LOADED');
       return finalValue;
     };
 
@@ -319,7 +317,7 @@ export const asyncWritable = <S extends Stores, T>(
     updater: Updater<T>,
     persist?: boolean
   ) => {
-    loadState?.set(LoadState.WRITING);
+    loadState?.set('WRITING');
     let oldValue: T;
     try {
       oldValue = await loadDependenciesThenSet(loadAll);
@@ -350,11 +348,11 @@ export const asyncWritable = <S extends Stores, T>(
         if (logError) {
           logError(e);
         }
-        loadState?.set(LoadState.ERROR);
+        loadState?.set('ERROR');
         throw e;
       }
     }
-    loadState?.set(LoadState.LOADED);
+    loadState?.set('LOADED');
   };
 
   // required properties
@@ -369,7 +367,7 @@ export const asyncWritable = <S extends Stores, T>(
   const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
   const reload = hasReloadFunction
     ? () => {
-        loadState?.set(LoadState.RELOADING);
+        loadState?.set('RELOADING');
         return loadDependenciesThenSet(reloadAll, reloadable);
       }
     : undefined;
@@ -378,7 +376,7 @@ export const asyncWritable = <S extends Stores, T>(
   const reset = testingMode
     ? () => {
         thisStore.set(initial);
-        loadState?.set(LoadState.LOADING);
+        loadState?.set('LOADING');
         loadedValuesString = undefined;
         currentLoadPromise = undefined;
       }

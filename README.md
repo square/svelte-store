@@ -287,14 +287,14 @@ State stores are a kind of non-Loadable Readable store that can be generated alo
 </script>
   <input bind:value={searchInput}>
   <button on:click={() => searchTerms.set(searchInput)}>search</button>
-  {#if $searchState === LoadState.LOADING}
+  {#if $searchState === 'LOADING'}
     <SearchTips />
-  {:else if $searchState === LoadState.LOADED}
+  {:else if $searchState === 'LOADED'}
     <SearchResults results={$searchResults} />
-  {:else if $searchState === LoadState.RELOADING }
+  {:else if $searchState === 'RELOADING'}
     <ActivityIcon />
     <SearchResults results={$searchResults} />
-  {:else if $searchState === LoadState.ERROR }
+  {:else if $searchState === 'ERROR'}
     <SearchError />
   {/if}
 <input >
