@@ -16,6 +16,9 @@ import {
   setCookie,
   setSessionStorageItem,
   setLocalStorageItem,
+  removeSessionStorageItem,
+  removeCookie,
+  removeLocalStorageItem,
 } from './storage-utils';
 
 export { get } from 'svelte/store';
@@ -631,6 +634,7 @@ export type StorageOptions = {
 
 interface Syncable<T> {
   resync: () => Promise<T>;
+  clear: () => Promise<void>;
   store: Syncable<T>;
 }
 
@@ -642,25 +646,30 @@ type SetStorageItem = (
   value: string,
   consentLevel?: unknown
 ) => void;
+type RemoveStorageItem = (key: string) => void;
 
 const getStorageFunctions = (
   type: StorageType
 ): {
   getStorageItem: GetStorageItem;
   setStorageItem: SetStorageItem;
+  removeStorageItem: RemoveStorageItem;
 } => {
   return {
     [StorageType.LOCAL_STORAGE]: {
       getStorageItem: getLocalStorageItem,
       setStorageItem: setLocalStorageItem,
+      removeStorageItem: removeLocalStorageItem,
     },
     [StorageType.SESSION_STORAGE]: {
       getStorageItem: getSessionStorageItem,
       setStorageItem: setSessionStorageItem,
+      removeStorageItem: removeSessionStorageItem,
     },
     [StorageType.COOKIE]: {
       getStorageItem: getCookie,
       setStorageItem: setCookie,
+      removeStorageItem: removeCookie,
     },
   }[type];
 };
@@ -694,9 +703,8 @@ export const persisted = <T>(
 ): Persisted<T> => {
   const { reloadable, storageType, consentLevel } = options;
 
-  const { getStorageItem, setStorageItem } = getStorageFunctions(
-    storageType || StorageType.LOCAL_STORAGE
-  );
+  const { getStorageItem, setStorageItem, removeStorageItem } =
+    getStorageFunctions(storageType || StorageType.LOCAL_STORAGE);
 
   const getKey = () => {
     if (typeof key === 'function') {
@@ -761,6 +769,17 @@ export const persisted = <T>(
 
   const load = thisStore.load;
 
+  const resync = async (): Promise<T> => {
+    await initialSync;
+    return synchronize(thisStore.set);
+  };
+
+  const clear = async () => {
+    const storageKey = await getKey();
+    removeStorageItem(storageKey);
+    thisStore.set(null);
+  };
+
   const reload = reloadable
     ? async () => {
         let newValue: T;
@@ -776,11 +795,6 @@ export const persisted = <T>(
       }
     : undefined;
 
-  const resync = async (): Promise<T> => {
-    await initialSync;
-    return synchronize(thisStore.set);
-  };
-
   return {
     get store() {
       return this;
@@ -790,6 +804,7 @@ export const persisted = <T>(
     update,
     load,
     resync,
+    clear,
     ...(reload && { reload }),
   };
 };

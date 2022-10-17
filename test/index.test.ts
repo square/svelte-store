@@ -955,6 +955,20 @@ describe('readable/writable stores', () => {
             expect(myStorage.load()).resolves.toBe('default');
           });
 
+          it('clears value from storage', async () => {
+            const myStorage = persisted('default', 'key', { storageType });
+
+            await myStorage.load();
+
+            expect(JSON.parse(getStorage('key'))).toBe('default');
+            expect(get(myStorage)).toBe('default');
+            expect(myStorage.load()).resolves.toBe('default');
+
+            await myStorage.clear();
+            expect(getStorage('key')).toBeNull();
+            expect(get(myStorage)).toBe(null);
+          });
+
           it('uses stored value if present', async () => {
             setStorage('key', JSON.stringify('already set'));
             const myStorage = persisted('default', 'key', { storageType });

@@ -239,6 +239,8 @@ With this setup we can persist our remote data across a page session! The first 
 
 If an external source updates the storage item of the persisted store the two values will go out of sync. In such a case we can call `.resync()` on the store in order to update the store the *parsed* value of the storage item.
 
+We are also able to wipe stored data by calling `clear()` on the store. The storage item will be removed and the value of the store set to `null`.
+
 #### persisted configuration / consent
 
 Persisting data to storage or cookies is subject to privacy laws regarding consent in some jurisdictions. Instead of building two different data flows that depend on whether tracking consent has been given or not, you can instead configure your persisted stores to work in both cases. To do so you will need to call the `configurePersistedConsent` function and pass in a consent checker that will accept a `consent level` and return a boolean indicating whether your user has consented to that level of tracking. You can then provide a consent level when building your persisted stores that will be passed to to the checker before storing data.
@@ -302,7 +304,7 @@ We are able to easily track the current activity of our search flow using `track
 
 Note that trackState is (currently) only available on asyncStores -- asyncReadable, asyncWritable, and asyncDerived.
 
-### asnycClient (BETA)
+### asyncClient (BETA)
 
 An asyncClient is a special kind of store that expands the functionality of another Loadable store. Creating an asyncClient allows you to start accessing the propeties of the object in your store before it has loaded. This is done by transforming all of the object's properties into asynchronous functions that will resolve when the store has loaded.
 
