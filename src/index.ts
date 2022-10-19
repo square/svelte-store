@@ -833,7 +833,12 @@ export const asyncClient = <S extends Loadable<unknown>>(
   loadable: S
 ): S & AsyncClient<StoresValues<S>> => {
   return new Proxy(Function.prototype, {
-    get: (_, property) => {
+    get: (functionProto, property) => {
+      if (functionProto[property]) {
+        // this ensures that jest is able to identify the proxy
+        // when setting up spies on its properties
+        return functionProto[property];
+      }
       if (loadable[property]) {
         return loadable[property];
       }

@@ -1,4 +1,10 @@
-import { asyncReadable, get, enableStoreTestingMode } from '../src/index';
+import {
+  asyncReadable,
+  get,
+  enableStoreTestingMode,
+  readable,
+  asyncClient,
+} from '../src/index';
 
 enableStoreTestingMode();
 
@@ -32,5 +38,19 @@ describe('can be reset for different tests', () => {
     await myReadable.load().catch(() => Promise.resolve());
 
     expect(get(myReadable)).toBe('initial');
+  });
+});
+
+describe('asyncClient', () => {
+  it('can spy on client properties', async () => {
+    const myClient = asyncClient(readable({ myFunc: () => 'some string' }));
+    const myFuncSpy = jest.spyOn(myClient, 'myFunc');
+
+    expect(myFuncSpy).toHaveBeenCalledTimes(0);
+
+    const result = await myClient.myFunc();
+
+    expect(result).toBe('some string');
+    expect(myFuncSpy).toHaveBeenCalledTimes(1);
   });
 });
