@@ -54,7 +54,7 @@ export interface Loadable<T> extends Readable<T> {
   load(): Promise<T>;
   reload?(): Promise<T>;
   state?: Readable<LoadState>;
-  flagForReload?(): void;
+  reset?(): void;
   store: Loadable<T>;
 }
 
@@ -233,8 +233,6 @@ export const asyncWritable = <S extends Stores, T>(
 
   let loadedValuesString: string;
   let currentLoadPromise: Promise<T>;
-  let forceReload = false;
-
   const tryLoad = async (values: StoresValues<S>) => {
     try {
       return await mappingLoadFunction(values);
@@ -250,7 +248,7 @@ export const asyncWritable = <S extends Stores, T>(
   // eslint-disable-next-line prefer-const
   let loadDependenciesThenSet: (
     parentLoadFunction: (stores: S) => Promise<StoresValues<S>>,
-    alwaysReload?: boolean
+    forceReload?: boolean
   ) => Promise<T>;
 
   const thisStore = vanillaWritable(initial, () => {
@@ -269,7 +267,7 @@ export const asyncWritable = <S extends Stores, T>(
 
   loadDependenciesThenSet = async (
     parentLoadFunction: (stores: S) => Promise<StoresValues<S>>,
-    alwaysReload = false
+    forceReload = false
   ) => {
     const loadParentStores = parentLoadFunction(stores);
 
@@ -285,14 +283,9 @@ export const asyncWritable = <S extends Stores, T>(
       get(store)
     ) as StoresValues<S>;
 
-    // ignore force reload when initially subscribing to store
-    if (forceReload && loadedValuesString === undefined) {
-      forceReload = false;
-    }
-
-    if (!alwaysReload) {
+    if (!forceReload) {
       const newValuesString = JSON.stringify(storeValues);
-      if (newValuesString === loadedValuesString && !forceReload) {
+      if (newValuesString === loadedValuesString) {
         // no change, don't generate new promise
         if (get(loadState) === LoadState.RELOADING) {
           loadState?.set(LoadState.LOADED);
@@ -300,11 +293,6 @@ export const asyncWritable = <S extends Stores, T>(
         return currentLoadPromise;
       }
       loadedValuesString = newValuesString;
-    }
-
-    if (forceReload) {
-      thisStore.set(initial);
-      forceReload = false;
     }
 
     // convert storeValues to single store value if expected by mapping function
@@ -387,7 +375,14 @@ export const asyncWritable = <S extends Stores, T>(
     : undefined;
 
   const state = loadState ? { subscribe: loadState.subscribe } : undefined;
-  const flagForReload = testingMode ? () => (forceReload = true) : undefined;
+  const reset = testingMode
+    ? () => {
+        thisStore.set(initial);
+        loadState?.set(LoadState.LOADING);
+        loadedValuesString = undefined;
+        currentLoadPromise = undefined;
+      }
+    : undefined;
 
   return {
     get store() {
@@ -399,7 +394,7 @@ export const asyncWritable = <S extends Stores, T>(
     load,
     ...(reload && { reload }),
     ...(state && { state }),
-    ...(flagForReload && { flagForReload }),
+    ...(reset && { reset }),
   };
 };
 
@@ -422,8 +417,12 @@ export const asyncDerived = <S extends Stores, T>(
   mappingLoadFunction: (values: StoresValues<S>) => Promise<T>,
   options?: AsyncStoreOptions<T>
 ): Loadable<T> => {
-  const { store, subscribe, load, reload, state, flagForReload } =
-    asyncWritable(stores, mappingLoadFunction, undefined, options);
+  const { store, subscribe, load, reload, state, reset } = asyncWritable(
+    stores,
+    mappingLoadFunction,
+    undefined,
+    options
+  );
 
   return {
     store,
@@ -431,7 +430,7 @@ export const asyncDerived = <S extends Stores, T>(
     load,
     ...(reload && { reload }),
     ...(state && { state }),
-    ...(flagForReload && { flagForReload }),
+    ...(reset && { reset }),
   };
 };
 

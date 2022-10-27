@@ -414,4 +414,4 @@ module.exports = {
 
 ## Testing
 
-Testing mode can be enabled using the `enableStoreTestingMode` function before running your tests. If testing mode is enabled async stores will include an additional function, `flagForReload`. This function can be called in between tests in order to force stores to reload the next time they are `load`ed. This is useful to test different load conditions for your app, such as endpoint failures.
+Testing mode can be enabled using the `enableStoreTestingMode` function before running your tests. If testing mode is enabled async stores will include an additional function, `reset`. This function can be called in between tests in order to force stores to reset their load state and return to their initial value. This is useful to test different load conditions for your app, such as endpoint failures.

@@ -12,7 +12,7 @@ const mockedFetch = jest.fn();
 const myReadable = asyncReadable('initial', () => mockedFetch());
 
 beforeEach(() => {
-  myReadable.flagForReload();
+  myReadable.reset();
 });
 
 describe('can be reset for different tests', () => {
