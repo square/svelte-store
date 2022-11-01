@@ -245,7 +245,7 @@ We are also able to wipe stored data by calling `clear()` on the store. The stor
 
 Persisting data to storage or cookies is subject to privacy laws regarding consent in some jurisdictions. Instead of building two different data flows that depend on whether tracking consent has been given or not, you can instead configure your persisted stores to work in both cases. To do so you will need to call the `configurePersistedConsent` function and pass in a consent checker that will accept a `consent level` and return a boolean indicating whether your user has consented to that level of tracking. You can then provide a consent level when building your persisted stores that will be passed to to the checker before storing data.
 
-*Supporting tracking consent is simple...*
+*GDPR compliance is easy...*
 
 ```javascript
 configurePersistedConsent(
@@ -380,6 +380,60 @@ The safeLoad function works similarly to loadAll, however any loading errors of 
 ### logAsyncErrors
 
 Using safeLoad or `{#await}{:then}{:catch}` blocks in templates allows you to catch and handle errors that occur during our async stores loading. However this can lead to a visibility problem: if you always catch the errors you may not be aware that your users are experiencing them. To deal with this you can pass an error logger into the `logAsyncErrors` function before you set up your stores. Then any time one of our async stores experiences an error while loading it will automatically call your error logging function regardless of how you handle the error downstream.
+
+### aborting / rebounce (BETA)
+
+Async functionality based on user input is prone to subtle race conditions and async stores are no exception. For example, imagine you want to get a paginated list of items. When the user changes pages a new request is made and then assigned to a `currentItems` variable. If a user changes pages quickly the requests to the items endpoint may resolve in a different order than they were made. If this happens, `currentItems` will reflect the last request to resolve, instead of the last request to be made. Thus the user will see an incorrect page of items.
+
+The solution for this problem is to `abort` old requests and to only resolve the most recent one. This can be performed on fetch requests using [abort controllers](https://developer.mozilla.org/en-US/docs/Web/API/AbortController). To support this pattern, async stores have special handling for rejections of aborted requests. If a store encounters an abort rejection while loading, the store's value will not update, and the rejection will be caught.
+
+While fetch requests have built in abort controller support, async functions do not. Thus the `rebounce` function is provided. It can be used to wrap an async function and automatically abort any in-flight calls when a new call is made.
+
+*Use rebounce to abort stale async calls...*
+
+```javascript
+let currentItems;
+
+const getItems = async (page) => {
+  const results = await itemsRequest(page)
+  return results.items;
+}
+
+const rebouncedGetItems = rebounce(getItems)
+
+const changePage = async (page) => {
+  currentItems = await rebouncedGetItems(page);
+}
+
+changePage(1);
+changePage(2);
+changePage(3);
+```
+
+Without using `rebounce`, `currentItems` would end up equaling the call to `getItems` that resolved last. However, when we called the rebounced `getItems`, it gives us a promise that resolves to the returned value of getItems, or an abort rejection when another call to `rebouncedGetItems` is made. This means that when we call `changePage` three times, the first and second calls to rebouncedGetItems will reject and only the third call will update `currentItems`.
+
+*Using rebounce with stores is straight forward...*
+
+```javascript
+const rebouncedGetItems = rebounce(
+  async (page) => {
+    const results = await itemsRequest(page)
+    return results.items;
+  },
+  200
+);
+
+const currentItems = asyncDerived(page, ($page) => {
+  return rebouncedGetItems($page);
+});
+```
+
+Here we have created a store for our `currentItems`. Whenever we update the `page` store we will automatically get our new items. By using `rebounce`, `currentItems` will always reflect the most up-to-date `page` value. Note we have also provided a number when calling rebounce. This creates a corresponding millisecond delay before the rebounced function is called. Successive calls within that time frame will abort the function before it is invoked. This is useful for limiting network requests. In this example, if our user continues to change the page, an `itemsRequest` will not be made until 200 ms has passed since `page` was updated. This means if our user rapidly clicks through pages 1 to 10, a network request will only be made (and our `currentItems` store updated) when they have settled on page 10.
+
+NOTES:
+
+- In flight rebounces can be manually aborted using `clear`. `rebouncedFunction.clear()`
+- Aborting an async function will cause it to reject, but it will not undo any side effects that have been created! Therefore it is critical that side effects are avoided within the rebounced function. Instead they should instead be performed after the rebounce has resolved.
 
 ## Putting it all Together
 

@@ -189,6 +189,69 @@ export const safeLoad = async <S extends Stores>(
   }
 };
 
+type FlatPromise<T> = T extends Promise<unknown> ? T : Promise<T>;
+
+/**
+ * Create a rebounced version of a provided function. The rebounced function resolves to the
+ * returned value of the original function, or rejects with an AbortError is the rebounced
+ * function is called again before resolution.
+ * @param callback The function to be rebounced.
+ * @param delay Adds millisecond delay upon rebounced function call before original function
+ * is called. Successive calls within this period create rejection without calling original function.
+ * @returns Rebounced version of proivded callback function.
+ */
+export const rebounce = <T, U>(
+  callback: (...args: T[]) => U,
+  delay = 0
+): ((...args: T[]) => FlatPromise<U>) & {
+  clear: () => void;
+} => {
+  let previousReject: (reason: Error) => void;
+  let existingTimer: ReturnType<typeof setTimeout>;
+
+  const rebounced = (...args: T[]): FlatPromise<U> => {
+    previousReject?.(
+      new DOMException('The function was rebounced.', 'AbortError')
+    );
+    let currentResolve: (value: U | PromiseLike<U>) => void;
+    let currentReject: (reason: Error) => void;
+
+    const currentPromise = new Promise((resolve, reject) => {
+      currentResolve = resolve;
+      currentReject = reject;
+    }) as U extends Promise<unknown> ? U : Promise<U>;
+
+    const resolveCallback = async () => {
+      try {
+        const result = await Promise.resolve(callback(...args));
+        currentResolve(result);
+      } catch (error) {
+        currentReject(error);
+      }
+    };
+
+    clearTimeout(existingTimer);
+    existingTimer = setTimeout(resolveCallback, delay);
+
+    previousReject = currentReject;
+
+    return currentPromise;
+  };
+
+  const clear = () => {
+    clearTimeout(existingTimer);
+    previousReject?.(
+      new DOMException('The function was rebounced.', 'AbortError')
+    );
+    existingTimer = undefined;
+    previousReject = undefined;
+  };
+
+  rebounced.clear = clear;
+
+  return rebounced;
+};
+
 // STORES
 
 type ErrorLogger = (e: Error) => void;
@@ -232,16 +295,26 @@ export const asyncWritable = <S extends Stores, T>(
     ? vanillaWritable<LoadState>('LOADING')
     : undefined;
 
+  // stringified representation of parents' loaded values
+  // used to track whether a change has occurred and the store reloaded
   let loadedValuesString: string;
+
+  let latestLoadAndSet: () => Promise<T>;
+
+  // most recent call of mappingLoadFunction, including resulting side effects
+  // (updating store value, tracking state, etc)
   let currentLoadPromise: Promise<T>;
+
   const tryLoad = async (values: StoresValues<S>) => {
     try {
       return await mappingLoadFunction(values);
     } catch (e) {
-      if (logError) {
-        logError(e);
+      if (e.name !== 'AbortError') {
+        if (logError) {
+          logError(e);
+        }
+        loadState?.set('ERROR');
       }
-      loadState?.set('ERROR');
       throw e;
     }
   };
@@ -288,9 +361,6 @@ export const asyncWritable = <S extends Stores, T>(
       const newValuesString = JSON.stringify(storeValues);
       if (newValuesString === loadedValuesString) {
         // no change, don't generate new promise
-        if (get(loadState) === 'RELOADING') {
-          loadState?.set('LOADED');
-        }
         return currentLoadPromise;
       }
       loadedValuesString = newValuesString;
@@ -300,13 +370,28 @@ export const asyncWritable = <S extends Stores, T>(
     const loadInput = Array.isArray(stores) ? storeValues : storeValues[0];
 
     const loadAndSet = async () => {
+      latestLoadAndSet = loadAndSet;
       if (get(loadState) === 'LOADED' || get(loadState) === 'ERROR') {
         loadState?.set('RELOADING');
       }
-      const finalValue = await tryLoad(loadInput);
-      thisStore.set(finalValue);
-      loadState?.set('LOADED');
-      return finalValue;
+      try {
+        const finalValue = await tryLoad(loadInput);
+        thisStore.set(finalValue);
+        loadState?.set('LOADED');
+        return finalValue;
+      } catch (e) {
+        // if a load is aborted, resolve to the current value of the store
+        if (e.name === 'AbortError') {
+          // Normally when a load is aborted we want to leave the state as is.
+          // However if the latest load is aborted we change back to LOADED
+          // so that it does not get stuck LOADING/RELOADIN'.
+          if (loadAndSet === latestLoadAndSet) {
+            loadState?.set('LOADED');
+          }
+          return get(thisStore);
+        }
+        throw e;
+      }
     };
 
     currentLoadPromise = loadAndSet();
@@ -366,9 +451,11 @@ export const asyncWritable = <S extends Stores, T>(
   // // optional properties
   const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
   const reload = hasReloadFunction
-    ? () => {
+    ? async () => {
         loadState?.set('RELOADING');
-        return loadDependenciesThenSet(reloadAll, reloadable);
+        const result = await loadDependenciesThenSet(reloadAll, reloadable);
+        loadState?.set('LOADED');
+        return result;
       }
     : undefined;
 

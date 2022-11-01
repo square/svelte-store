@@ -11,11 +11,11 @@ import {
   isReloadable,
   Loadable,
   loadAll,
-  LoadState,
   logAsyncErrors,
   persisted,
   Readable,
   readable,
+  rebounce,
   reloadAll,
   safeLoad,
   StorageType,
@@ -91,6 +91,83 @@ describe('loadAll / reloadAll utils', () => {
     it('resolves to false with bad store', () => {
       expect(safeLoad(badLoadable)).resolves.toBe(false);
     });
+  });
+});
+
+describe('rebounce', () => {
+  const abortError = new DOMException(
+    'The function was rebounced.',
+    'AbortError'
+  );
+  const interval = jest.fn();
+
+  beforeEach(() => {
+    interval.mockReset();
+    interval
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(80)
+      .mockReturnValueOnce(60)
+      .mockReturnValue(10);
+  });
+
+  const toUpperCase = (input: string) => input.toUpperCase();
+
+  const asyncToUpperCase = (input: string) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(input.toUpperCase());
+      }, interval());
+    });
+  };
+
+  it('works with no timer or rejects', () => {
+    const rebouncedToUpperCase = rebounce(asyncToUpperCase);
+
+    expect(rebouncedToUpperCase('some')).rejects.toStrictEqual(abortError);
+    expect(rebouncedToUpperCase('lowercase')).rejects.toStrictEqual(abortError);
+    expect(rebouncedToUpperCase('strings')).resolves.toBe('STRINGS');
+  });
+
+  it('can be called after resolving', async () => {
+    const rebouncedToUpperCase = rebounce(asyncToUpperCase);
+
+    expect(rebouncedToUpperCase('some')).rejects.toStrictEqual(abortError);
+    const result = await rebouncedToUpperCase('lowercase');
+    expect(result).toBe('LOWERCASE');
+
+    expect(rebouncedToUpperCase('strings')).resolves.toBe('STRINGS');
+  });
+
+  it('works with timer', () => {
+    const getValue = jest
+      .fn()
+      .mockReturnValueOnce('one')
+      .mockReturnValueOnce('two')
+      .mockReturnValueOnce('more');
+    const rebouncedGetValue = rebounce(getValue, 100);
+
+    expect(rebouncedGetValue()).rejects.toStrictEqual(abortError);
+    expect(rebouncedGetValue()).rejects.toStrictEqual(abortError);
+    expect(rebouncedGetValue()).resolves.toStrictEqual('one');
+  });
+
+  it('passes through rejections', () => {
+    const someError = new Error('some error');
+    const rebouncedRejection = rebounce(
+      (_: string) => Promise.reject(someError),
+      100
+    );
+
+    expect(rebouncedRejection('some')).rejects.toStrictEqual(abortError);
+    expect(rebouncedRejection('lowercase')).rejects.toStrictEqual(abortError);
+    expect(rebouncedRejection('strings')).rejects.toStrictEqual(someError);
+  });
+
+  it('can be cleared', () => {
+    const rebouncedToUpperCase = rebounce(toUpperCase, 100);
+
+    expect(rebouncedToUpperCase('a string')).rejects.toStrictEqual(abortError);
+    rebouncedToUpperCase.clear();
   });
 });
 
@@ -294,6 +371,91 @@ describe('asyncWritable', () => {
       expect(secondValue).toBe('updated second');
       expect(firstDerivedLoad).toHaveBeenCalledTimes(1);
       expect(secondDerivedLoad).toHaveBeenCalledTimes(2);
+    });
+
+    describe('abort/rebounce integration', () => {
+      it('loads to rebounced value only', async () => {
+        const load = (value: string) => {
+          return new Promise<string>((resolve) =>
+            setTimeout(() => resolve(value), 100)
+          );
+        };
+
+        const rebouncedLoad = rebounce(load);
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          rebouncedLoad,
+          {
+            trackState: true,
+          }
+        );
+
+        let setIncorrectly = false;
+        myStore.subscribe((value) => {
+          if (['a', 'b'].includes(value)) {
+            setIncorrectly = true;
+          }
+        });
+
+        let everErrored = false;
+        myState.subscribe((state) => {
+          if (state === 'ERROR') {
+            everErrored = true;
+          }
+        });
+
+        myParent.set('a');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState)).toBe('LOADING');
+        myParent.set('b');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState)).toBe('LOADING');
+        myParent.set('c');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState)).toBe('LOADING');
+
+        const finalValue = await myStore.load();
+
+        expect(everErrored).toBe(false);
+        expect(setIncorrectly).toBe(false);
+        expect(finalValue).toBe('c');
+        expect(get(myStore)).toBe('c');
+        expect(get(myState)).toBe('LOADED');
+      });
+
+      it('can be cleared correctly', async () => {
+        const load = (value: string) => {
+          return new Promise<string>((resolve) =>
+            setTimeout(() => resolve(value), 100)
+          );
+        };
+
+        const rebouncedLoad = rebounce(load);
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          rebouncedLoad,
+          {
+            trackState: true,
+          }
+        );
+
+        myStore.subscribe(jest.fn());
+
+        myParent.set('one');
+        let loadValue = await myStore.load();
+        expect(loadValue).toBe('one');
+
+        myParent.set('two');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        rebouncedLoad.clear();
+        loadValue = await myStore.load();
+
+        expect(loadValue).toBe('one');
+        expect(get(myStore)).toBe('one');
+        expect(get(myState)).toBe('LOADED');
+      });
     });
   });
 
@@ -1661,6 +1823,47 @@ describe('readable/writable stores', () => {
         await myStore.load();
 
         expect(get(myStore)).toBe('derived from updated');
+        expect(get(myState)).toBe('LOADED');
+      });
+
+      it('tracks reloading with multiple parent updates', async () => {
+        const grandParent = writable('initial');
+        const parentA = derived(
+          grandParent,
+          ($grandParent) => `${$grandParent}A`
+        );
+        const parentB = derived(
+          grandParent,
+          ($grandParent) => `${$grandParent}B`
+        );
+        const { store: myStore, state: myState } = asyncDerived(
+          [parentA, parentB],
+          ([$parentA, $parentB]) => {
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                resolve(`${$parentA} ${$parentB}`);
+              }, 100);
+            });
+          },
+          { trackState: true }
+        );
+
+        expect(get(myState)).toBe('LOADING');
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('initialA initialB');
+        expect(get(myState)).toBe('LOADED');
+
+        grandParent.set('updated');
+        await new Promise((resolve) => setTimeout(resolve));
+
+        expect(get(myStore)).toBe('initialA initialB');
+        expect(get(myState)).toBe('RELOADING');
+
+        await myStore.load();
+
+        expect(get(myStore)).toBe('updatedA updatedB');
         expect(get(myState)).toBe('LOADED');
       });
     });
