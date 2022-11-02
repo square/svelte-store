@@ -287,20 +287,20 @@ State stores are a kind of non-Loadable Readable store that can be generated alo
 </script>
   <input bind:value={searchInput}>
   <button on:click={() => searchTerms.set(searchInput)}>search</button>
-  {#if $searchState === 'LOADING'}
+  {#if $searchState.isLoading}
     <SearchTips />
-  {:else if $searchState === 'LOADED'}
+  {:else if $searchState.isLoaded}
     <SearchResults results={$searchResults} />
-  {:else if $searchState === 'RELOADING'}
+  {:else if $searchState.isReloading}
     <ActivityIcon />
     <SearchResults results={$searchResults} />
-  {:else if $searchState === 'ERROR'}
+  {:else if $searchState.isError}
     <SearchError />
   {/if}
 <input >
 ```
 
-We are able to easily track the current activity of our search flow using `trackState`. Our `searchState` will initialize to `LOADING`. When the `searchTerms` store is first set it will `load`, which will kick off `searchTerms` own loading process. After that completes searchState will update to `LOADED`. Any further changes to `searchTerms` will kick off a new load process, at which point `searchTerms` will update to `RELOADING`.
+We are able to easily track the current activity of our search flow using `trackState`. Our `searchState` will initialize to `LOADING`. When the `searchTerms` store is first set it will `load`, which will kick off `searchTerms` own loading process. After that completes searchState will update to `LOADED`. Any further changes to `searchTerms` will kick off a new load process, at which point `searchTerms` will update to `RELOADING`. We are also able to check summary states: `isPending` is true when `LOADING` or `RELOADING` and `isSettled` is true when `LOADED` or `ERROR`.
 
 Note that trackState is (currently) only available on asyncStores -- asyncReadable, asyncWritable, and asyncDerived.
 
@@ -410,7 +410,7 @@ changePage(2);
 changePage(3);
 ```
 
-Without using `rebounce`, `currentItems` would end up equaling the call to `getItems` that resolved last. However, when we called the rebounced `getItems`, it gives us a promise that resolves to the returned value of getItems, or an abort rejection when another call to `rebouncedGetItems` is made. This means that when we call `changePage` three times, the first and second calls to rebouncedGetItems will reject and only the third call will update `currentItems`.
+Without using `rebounce`, `currentItems` would end up equaling the value of `getItems` that *resolves* last. However, when we called the rebounced `getItems` it will equal value of `getItems` that is *called* last. This is because a rebounced function returns a promise that resolves to the returned value of the function, but this promise is aborted when another call to the function is made. This means that when we call `changePage` three times, the first and second calls to `rebouncedGetItems` will reject and only the third call will update `currentItems`.
 
 *Using rebounce with stores is straight forward...*
 
@@ -428,7 +428,7 @@ const currentItems = asyncDerived(page, ($page) => {
 });
 ```
 
-Here we have created a store for our `currentItems`. Whenever we update the `page` store we will automatically get our new items. By using `rebounce`, `currentItems` will always reflect the most up-to-date `page` value. Note we have also provided a number when calling rebounce. This creates a corresponding millisecond delay before the rebounced function is called. Successive calls within that time frame will abort the function before it is invoked. This is useful for limiting network requests. In this example, if our user continues to change the page, an `itemsRequest` will not be made until 200 ms has passed since `page` was updated. This means if our user rapidly clicks through pages 1 to 10, a network request will only be made (and our `currentItems` store updated) when they have settled on page 10.
+Here we have created a store for our `currentItems`. Whenever we update the `page` store we will automatically get our new items. By using `rebounce`, `currentItems` will always reflect the most up-to-date `page` value. Note we have also provided a number when calling rebounce. This creates a corresponding millisecond delay before the rebounced function is called. Successive calls within that time frame will abort the previous calls *before* the rebounced function is invoked. This is useful for limiting network requests. In this example, if our user continues to change the page, an `itemsRequest` will not be made until 200 ms has passed since `page` was updated. This means, if our user rapidly clicks through pages 1 to 10, a network request will only be made (and our `currentItems` store updated) when they have settled on page 10.
 
 NOTES:
 

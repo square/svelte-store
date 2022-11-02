@@ -400,20 +400,20 @@ describe('asyncWritable', () => {
 
         let everErrored = false;
         myState.subscribe((state) => {
-          if (state === 'ERROR') {
+          if (state.isError) {
             everErrored = true;
           }
         });
 
         myParent.set('a');
         await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
         myParent.set('b');
         await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
         myParent.set('c');
         await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         const finalValue = await myStore.load();
 
@@ -421,7 +421,7 @@ describe('asyncWritable', () => {
         expect(setIncorrectly).toBe(false);
         expect(finalValue).toBe('c');
         expect(get(myStore)).toBe('c');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('can be cleared correctly', async () => {
@@ -454,7 +454,16 @@ describe('asyncWritable', () => {
 
         expect(loadValue).toBe('one');
         expect(get(myStore)).toBe('one');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
+      });
+
+      it('rejects load when rebounce reject', () => {
+        const rebouncedReject = rebounce(() => Promise.reject('error'), 100);
+        const parent = writable();
+        const rejectStore = asyncDerived(parent, () => rebouncedReject());
+
+        parent.set('value');
+        expect(() => rejectStore.load()).rejects.toBe('error');
       });
     });
   });
@@ -1669,12 +1678,12 @@ describe('readable/writable stores', () => {
         );
 
         expect(get(myStore)).toBe('initial');
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('loaded value');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('works with asyncDerived', async () => {
@@ -1685,12 +1694,12 @@ describe('readable/writable stores', () => {
         );
 
         expect(get(myStore)).toBe('initial');
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('loaded value');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('works with asyncReadable', async () => {
@@ -1701,12 +1710,12 @@ describe('readable/writable stores', () => {
         );
 
         expect(get(myStore)).toBe('initial');
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('loaded value');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
     });
 
@@ -1718,19 +1727,19 @@ describe('readable/writable stores', () => {
           { reloadable: true, trackState: true }
         );
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         const reloadPromise = myStore.reload();
 
-        expect(get(myState)).toBe('RELOADING');
+        expect(get(myState).isReloading).toBe(true);
 
         await reloadPromise;
 
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('tracks reloading of reloadable parent', async () => {
@@ -1747,22 +1756,22 @@ describe('readable/writable stores', () => {
           { trackState: true }
         );
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('derived from first load');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         const reloadPromise = myStore.reload();
 
         expect(get(myStore)).toBe('derived from first load');
-        expect(get(myState)).toBe('RELOADING');
+        expect(get(myState).isReloading).toBe(true);
 
         await reloadPromise;
 
         expect(get(myStore)).toBe('derived from second load');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('tracks reloading of reloadable parent when no change', async () => {
@@ -1776,22 +1785,22 @@ describe('readable/writable stores', () => {
           { trackState: true }
         );
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('derived from load');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         const reloadPromise = myStore.reload();
 
         expect(get(myStore)).toBe('derived from load');
-        expect(get(myState)).toBe('RELOADING');
+        expect(get(myState).isReloading).toBe(true);
 
         await reloadPromise;
 
         expect(get(myStore)).toBe('derived from load');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('tracks automatic reloading when parent change', async () => {
@@ -1807,23 +1816,23 @@ describe('readable/writable stores', () => {
 
         myStore.subscribe(jest.fn());
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('derived from initial');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         myParent.set('updated');
         await new Promise((resolve) => setTimeout(resolve));
 
         expect(get(myStore)).toBe('derived from initial');
-        expect(get(myState)).toBe('RELOADING');
+        expect(get(myState).isReloading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('derived from updated');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('tracks reloading with multiple parent updates', async () => {
@@ -1848,23 +1857,23 @@ describe('readable/writable stores', () => {
           { trackState: true }
         );
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('initialA initialB');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         grandParent.set('updated');
         await new Promise((resolve) => setTimeout(resolve));
 
         expect(get(myStore)).toBe('initialA initialB');
-        expect(get(myState)).toBe('RELOADING');
+        expect(get(myState).isReloading).toBe(true);
 
         await myStore.load();
 
         expect(get(myStore)).toBe('updatedA updatedB');
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
     });
 
@@ -1875,11 +1884,11 @@ describe('readable/writable stores', () => {
           () => Promise.reject('error'),
           { trackState: true }
         );
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await safeLoad(myStore);
 
-        expect(get(myState)).toBe('ERROR');
+        expect(get(myState).isError).toBe(true);
       });
 
       it('tracks error during reload', async () => {
@@ -1892,15 +1901,15 @@ describe('readable/writable stores', () => {
           load,
           { trackState: true, reloadable: true }
         );
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await safeLoad(myStore);
 
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         await myStore.reload().catch(jest.fn());
 
-        expect(get(myState)).toBe('ERROR');
+        expect(get(myState).isError).toBe(true);
       });
 
       it('tracks error during parent load', async () => {
@@ -1917,15 +1926,15 @@ describe('readable/writable stores', () => {
           { trackState: true }
         );
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await safeLoad(myStore);
 
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         await myStore.reload().catch(jest.fn());
 
-        expect(get(myState)).toBe('ERROR');
+        expect(get(myState).isError).toBe(true);
       });
     });
 
@@ -1938,19 +1947,19 @@ describe('readable/writable stores', () => {
           { trackState: true }
         );
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         const setPromise = myStore.set('intermediate value');
 
-        expect(get(myState)).toBe('WRITING');
+        expect(get(myState).isWriting).toBe(true);
 
         await setPromise;
 
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
       });
 
       it('tracks writing error', async () => {
@@ -1961,19 +1970,19 @@ describe('readable/writable stores', () => {
           { trackState: true }
         );
 
-        expect(get(myState)).toBe('LOADING');
+        expect(get(myState).isLoading).toBe(true);
 
         await myStore.load();
 
-        expect(get(myState)).toBe('LOADED');
+        expect(get(myState).isLoaded).toBe(true);
 
         const setPromise = myStore.set('intermediate value');
 
-        expect(get(myState)).toBe('WRITING');
+        expect(get(myState).isWriting).toBe(true);
 
         await setPromise.catch(jest.fn());
 
-        expect(get(myState)).toBe('ERROR');
+        expect(get(myState).isError).toBe(true);
       });
     });
   });
