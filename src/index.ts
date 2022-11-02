@@ -42,12 +42,17 @@ export const enableStoreTestingMode = (): void => {
 };
 
 // TYPES
-export type LoadState =
-  | 'LOADING'
-  | 'LOADED'
-  | 'RELOADING'
-  | 'ERROR'
-  | 'WRITING';
+type State = 'LOADING' | 'LOADED' | 'RELOADING' | 'ERROR' | 'WRITING';
+
+export type LoadState = {
+  isLoading: boolean;
+  isReloading: boolean;
+  isLoaded: boolean;
+  isWriting: boolean;
+  isError: boolean;
+  isPending: boolean; // LOADING or RELOADING
+  isSettled: boolean; // LOADED or ERROR
+};
 
 export interface Loadable<T> extends Readable<T> {
   load(): Promise<T>;
@@ -261,6 +266,18 @@ export const logAsyncErrors = (logger: ErrorLogger): void => {
   logError = logger;
 };
 
+const getLoadState = (stateString: State): LoadState => {
+  return {
+    isLoading: stateString === 'LOADING',
+    isReloading: stateString === 'RELOADING',
+    isLoaded: stateString === 'LOADED',
+    isWriting: stateString === 'WRITING',
+    isError: stateString === 'ERROR',
+    isPending: stateString === 'LOADING' || stateString === 'RELOADING',
+    isSettled: stateString === 'LOADED' || stateString === 'ERROR',
+  };
+};
+
 /**
  * Generate a Loadable store that is considered 'loaded' after resolving synchronous or asynchronous behavior.
  * This behavior may be derived from the value of parent Loadable or non Loadable stores.
@@ -292,8 +309,10 @@ export const asyncWritable = <S extends Stores, T>(
   const { reloadable, trackState, initial } = options;
 
   const loadState = trackState
-    ? vanillaWritable<LoadState>('LOADING')
+    ? vanillaWritable<LoadState>(getLoadState('LOADING'))
     : undefined;
+
+  const setState = (state: State) => loadState?.set(getLoadState(state));
 
   // stringified representation of parents' loaded values
   // used to track whether a change has occurred and the store reloaded
@@ -313,7 +332,7 @@ export const asyncWritable = <S extends Stores, T>(
         if (logError) {
           logError(e);
         }
-        loadState?.set('ERROR');
+        setState('ERROR');
       }
       throw e;
     }
@@ -349,7 +368,7 @@ export const asyncWritable = <S extends Stores, T>(
       await loadParentStores;
     } catch {
       currentLoadPromise = loadParentStores as Promise<T>;
-      loadState?.set('ERROR');
+      setState('ERROR');
       return currentLoadPromise;
     }
 
@@ -371,13 +390,13 @@ export const asyncWritable = <S extends Stores, T>(
 
     const loadAndSet = async () => {
       latestLoadAndSet = loadAndSet;
-      if (get(loadState) === 'LOADED' || get(loadState) === 'ERROR') {
-        loadState?.set('RELOADING');
+      if (get(loadState)?.isSettled) {
+        setState('RELOADING');
       }
       try {
         const finalValue = await tryLoad(loadInput);
         thisStore.set(finalValue);
-        loadState?.set('LOADED');
+        setState('LOADED');
         return finalValue;
       } catch (e) {
         // if a load is aborted, resolve to the current value of the store
@@ -386,7 +405,7 @@ export const asyncWritable = <S extends Stores, T>(
           // However if the latest load is aborted we change back to LOADED
           // so that it does not get stuck LOADING/RELOADIN'.
           if (loadAndSet === latestLoadAndSet) {
-            loadState?.set('LOADED');
+            setState('LOADED');
           }
           return get(thisStore);
         }
@@ -402,7 +421,7 @@ export const asyncWritable = <S extends Stores, T>(
     updater: Updater<T>,
     persist?: boolean
   ) => {
-    loadState?.set('WRITING');
+    setState('WRITING');
     let oldValue: T;
     try {
       oldValue = await loadDependenciesThenSet(loadAll);
@@ -433,11 +452,11 @@ export const asyncWritable = <S extends Stores, T>(
         if (logError) {
           logError(e);
         }
-        loadState?.set('ERROR');
+        setState('ERROR');
         throw e;
       }
     }
-    loadState?.set('LOADED');
+    setState('LOADED');
   };
 
   // required properties
@@ -452,18 +471,20 @@ export const asyncWritable = <S extends Stores, T>(
   const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
   const reload = hasReloadFunction
     ? async () => {
-        loadState?.set('RELOADING');
+        setState('RELOADING');
         const result = await loadDependenciesThenSet(reloadAll, reloadable);
-        loadState?.set('LOADED');
+        setState('LOADED');
         return result;
       }
     : undefined;
 
-  const state = loadState ? { subscribe: loadState.subscribe } : undefined;
+  const state: Readable<LoadState> = loadState
+    ? { subscribe: loadState.subscribe }
+    : undefined;
   const reset = testingMode
     ? () => {
         thisStore.set(initial);
-        loadState?.set('LOADING');
+        setState('LOADING');
         loadedValuesString = undefined;
         currentLoadPromise = undefined;
       }
