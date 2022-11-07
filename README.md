@@ -58,7 +58,7 @@ const userInfo = asyncReadable(
     const userObject = await response.json();
     return userObject;
   },
-  {reloadable: true}
+  { reloadable: true }
 );
 ```
 
@@ -198,7 +198,7 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 {/await}
 ```
 
-### persisted (BETA)
+### persisted
 
 Sometimes data needs to persist outside the lifecycle of our app. By using persisted stores you can accomplish this while gaining all of the other benefits of Loadable stores. A persisted store synchronizes (stringifiable) store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
 
@@ -231,7 +231,7 @@ const remoteSessionToken = asyncReadable(
 const sessionToken = persisted(
   remoteSessionToken,
   'SESSION_TOKEN',
-  {reloadable: true}
+  { reloadable: true }
 );
 ```
 
@@ -266,7 +266,7 @@ Here we hypothesize a setup where a user's consentLevels are accessible through 
 
 Note that if no consent level is provided, `undefined` will be passed to the consent checker. This can be handled to provide a default consent for your persisted stores when a consent level is not provided.
 
-### state (BETA)
+### state
 
 State stores are a kind of non-Loadable Readable store that can be generated alongside async stores in order to track their load state. This can be done by passing the `trackState` to the store options during creation. This is particular useful for reloadable or asyncDerived stores which might go into a state of pulling new data.
 
@@ -285,7 +285,8 @@ State stores are a kind of non-Loadable Readable store that can be generated alo
     { trackState: true }
   )
 </script>
-  <input bind:value={searchInput}>
+
+<input bind:value={searchInput}>
   <button on:click={() => searchTerms.set(searchInput)}>search</button>
   {#if $searchState.isLoading}
     <SearchTips />
@@ -304,7 +305,7 @@ We are able to easily track the current activity of our search flow using `track
 
 Note that trackState is (currently) only available on asyncStores -- asyncReadable, asyncWritable, and asyncDerived.
 
-### asyncClient (BETA)
+### asyncClient
 
 An asyncClient is a special kind of store that expands the functionality of another Loadable store. Creating an asyncClient allows you to start accessing the propeties of the object in your store before it has loaded. This is done by transforming all of the object's properties into asynchronous functions that will resolve when the store has loaded.
 

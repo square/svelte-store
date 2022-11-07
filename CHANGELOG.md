@@ -1,5 +1,19 @@
 # Changelog #
 
+## 1.0.10 (2022-11-07)
+
+- *BREAKING CHANGE* feat: stores now take an options object instead of separate parameters for reloadable and initial
+  - How to migrate: async stores that have been marked as reloadable, or have been given a non default initial value, must be changed to receive an options object as the last parameter with the following format: `{ reloadable: true, initial: someValue }`
+- feat: add persisted stores (synchronized value with storage items or cookies)
+- feat: add asyncClient stores (proxies async stores so their values can be interacted with before loading)
+- feat: add logAsyncErrors configuration function (allows automatic logging of async load errors)
+- feat: add track state feature for async stores. `trackState` can be provided as an option upon store creation. This will generate a second store that can be used for reactive conditional rendering based on the primary store's load state.
+- fix: loading a store will ensure that there is a subscriber to that store for the duration of the load process. This ensures that the `start` function of the store, or of any parent stores, is still run if the store is loaded without any other active subscribers. It additionally ensures that derived stores receive value updates from any changes to parents.
+- *BREAKING CHANGE* feat: `flagForReload` replaced by `reset` function. Reset puts the store in it's initial state when reset is called, rather than upon next load of the store like flagForReload.
+  - How to migrate: change usages of `flagForReload()` to `reset()`;
+- feat: async stores support fetch aborts via abort controllers. Fetch requests in an async store's load function can be aborted using an abort controller to prevent the store's value from updating without resulting in a load rejection.
+- feat: add `rebounce` function. `rebounce` wraps an async function to automatically abort any in-flight calls to that function when a new call is made. This can be used in a store's load function to prevent race condition bugs that can arise from multiple near-concurrent updates.
+
 ## <small>0.2.3 (2022-09-20)</small>
 
 - fix: loading a readable/writable store will run start function
