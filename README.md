@@ -225,7 +225,7 @@ const remoteSessionToken = asyncReadable(
     const session = await generateSession();
     return session.token;
   },
-  { reloadable: true, storageType: StorageType.SESSION_STORAGE },
+  { reloadable: true, storageType: 'SESSION_STORAGE' },
 );
 
 const sessionToken = persisted(
@@ -256,7 +256,7 @@ const hasDismissedTooltip = persisted(
   false, 
   'TOOLTIP_DISMISSED', 
   { 
-    storageType: StorageType.COOKIE,
+    storageType: 'COOKIE',
     consentLevel: 'TRACKING'
   }
 );
