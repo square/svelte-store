@@ -11,7 +11,7 @@ Square Svelte Store builds upon Svelte's default store behavior to empower your 
 ```javascript
 // You can declare an asyncDerived store just like a derived store,
 // but with an async function to set the store's value!
-const  searchResults = asyncDerived(
+const searchResults = asyncDerived(
   [authToken, searchTerms],
   async ([$authToken, $searchTerms]) => {
     const rawResults = await search($authToken, $searchTerms);
@@ -46,7 +46,7 @@ While hydrating your app with data, some endpoints you will only need to access 
 
 ### asyncReadable
 
-An asyncReadable store provides easy asynchronous support to readable stores. Like a readable store, an asyncReadable store takes in an initial value and a function that is called when the store is first subscribed to. For an asyncReadable store this function is an async `loadFunction` which takes no arguments and returns the loaded value of the store. An optional third parameter can specify if the store is Reloadable or not (false by default).
+An asyncReadable store provides easy asynchronous support to readable stores. Like a readable store, an asyncReadable store takes in an initial value and a function that is called when the store is first subscribed to. For an asyncReadable store this function is an async `loadFunction` which takes no arguments and returns the loaded value of the store. An optional third parameter can specify options for the store, in this case declaring it to be reloadable.
 
 *asyncReadable stores are super simple! Let's see it in action...*
 
@@ -58,13 +58,13 @@ const userInfo = asyncReadable(
     const userObject = await response.json();
     return userObject;
   },
-  true
+  { reloadable: true }
 );
 ```
 
-Now we have a Loadable and reloadable userInfo store! As soon as our app renders a component that needs data from userInfo it will begin to load. We can `{#await userInfo.load()}` in our components that need userInfo. This will delay rendering until we have the data we need. Since we have provided `true` as a third argument we can call `userInfo.reload()` to pull new data (and reactively update our components once we have it).
+Now we have a Loadable and reloadable userInfo store! As soon as our app renders a component that needs data from userInfo it will begin to load. We can `{#await userInfo.load()}` in our components that need userInfo. This will delay rendering until we have the data we need. Since we have declared the store to be reloadable we can call `userInfo.reload()` to pull new data (and reactively update our components once we have it).
 
-## derived
+### derived
 
 Okay this isn't a new store, but it does have some new features! We declare a derived store the same as ever, but it now gives us access to a `load` function. This load function resolves after all parents have loaded and the derived store has calculated its final value.
 
@@ -75,11 +75,11 @@ const userSettings = derived(userInfo, ($userInfo) => $userInfo?.settings);
 const darkMode = derived(userSettings, ($userSetting) => $userSettings?.darkMode);
 ```
 
-Now we've got a darkMode store that tracks whether our user has selected darkMode for our app. When we use this store in a component we can call `darkMode.load()`. This awaits userSettings loading, which in turn awaits userInfo. In this way, we can load a derived store to automatically load the sources of its data and to wait for its final value. What's more, since darkMode derives froma reloadable source, we can call `darkMode.reload()` to get new userInfo if we encounter a situation where the user's darkMode setting may have changed.
+Now we've got a darkMode store that tracks whether our user has selected darkMode for our app. When we use this store in a component we can call `darkMode.load()`. This awaits userSettings loading, which in turn awaits userInfo. In this way, we can load a derived store to automatically load the sources of its data and to wait for its final value. What's more, since darkMode derives from a reloadable source, we can call `darkMode.reload()` to get new userInfo if we encounter a situation where the user's darkMode setting may have changed.
 
 This isn't very impressive with our simple example, but as we build out our app and encounter situations where derived values come fom multiple endpoints through several layers of derivations this becomes much more useful. Being able to call load and reload on just the data you need is much more convenient than tracking down all of the dependencies involved!
 
-## asyncDerived
+### asyncDerived
 
 An asyncDerived store works just like a derived store, but with an asynchronous call to get the final value of the store!
 
@@ -103,7 +103,7 @@ Here we have a store that reflects a paginated set of results from an endpoint. 
 
 After the stores have finished loading any new changes to the parent stores will create a new network request. In this example if we write to the page store when the user changes pages we will automatically make a new request that will update our results store. Just like with asyncReadable stores we can include a boolean to indicate that an asyncDerived store will be Reloadable.
 
-## asyncWritable
+### asyncWritable
 
 Here's where things get a little more complicated. Just like the other async stores this store mirrors an existing store. Like a regular writable store this store will have `set` and `update` functions that lets you set the store's value. But why would we want to set the value of the store if the store's value comes from a network call? To answer this let's consider the following use case: in our app we have a list of favorite shortcuts for our user. They can rearrange these shortcuts in order to personalize their experience. When a user rearranges their shortcuts we could manually make a new network request to save their choice, then reload the async store that tracks the list of shortcuts. However that would mean that the user would not see the results of their customization until the network request completes. Instead we can use an asyncWritable store. When the user customizes their list of shortcuts we will optimistically update the corresponding store. This update kicks off a network request to save the user's customization to our backend. Finally, when the network request completes we update our store to reflect the canonical version of the user's list.
 
@@ -162,7 +162,7 @@ In this example we derive from an authToken store and include it in both our GET
 
 Some niche features of asyncWritable stores allow for more specific error handling of write functions. The write function we provide as the third argument can be written to accept a third argument that receives the value of the store before it was set. This allows for resetting the value of the store in the case of a write failure by catching the error and returning the old value. A similar feature is that both the `set` and `update` functions can take a second argument that indicates whether the async write functionality should be called during the set process.
 
-## readable/writable
+### readable/writable
 
 Similarly to derived stores, addtional load functionality is bundled with readable and writable stores. Both readable and writable stores include a `.load()` function that will resolve when the value of the store is first set. If an initial value is provided when creating the store, this means the store will load immeadietly. However, if a value is not provided (left `undefined`) then the store will only load after it is set to a value. This makes it easy to wait on user input, an event listener, etc. in your application.
 
@@ -170,8 +170,8 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 
 ```javascript
 <script>
-  const hasConsent = actionWritable((set) => {
-    const setConsent = set(true);
+  const hasConsent = writable((set) => {
+    const setConsent = () => set(true);
     addEventListener('CONSENT_EVENT', setConsent);
 
     return () => removeEventListener('CONSENT_EVENT', setConsent);  
@@ -198,6 +198,163 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 {/await}
 ```
 
+### persisted
+
+Sometimes data needs to persist outside the lifecycle of our app. By using persisted stores you can accomplish this while gaining all of the other benefits of Loadable stores. A persisted store synchronizes (stringifiable) store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
+
+*We can persist a user name across page loads...*
+
+```javascript
+<script>
+  // if we don't specify what kind of storage, default to localStorage
+  const userName = persisted('John Doe', 'USER_DATA');
+</script>
+
+// If we reload the page, this input will still have the same value!
+<input bind:value={$userName}>
+```
+
+If data isn't already in storage, it may need to be fetched asynchronously. In this case we can pass a Loadable store to our persisted store in place of an initial value. Doing so will load the Loadable store if no storage item is found and then synchronize the persisted store and storage with the loaded value. We can also declare the persisted store to be reloadable, in which case a call to `.reload()` will attempt to reload the parent Loadable store and persist the new data to storage.
+
+*Persisting remote data is simple...*
+
+```javascript
+const remoteSessionToken = asyncReadable(
+  undefined, 
+  async () => {
+    const session = await generateSession();
+    return session.token;
+  },
+  { reloadable: true, storageType: 'SESSION_STORAGE' },
+);
+
+const sessionToken = persisted(
+  remoteSessionToken,
+  'SESSION_TOKEN',
+  { reloadable: true }
+);
+```
+
+With this setup we can persist our remote data across a page session! The first page load of the session will load from the remote source, but successive page loads will use the persisted token in session storage. What's more is that because Loadable stores are lazily loaded, `remoteSessionToken` will only fetch remote data when its needed for `sessionToken` (provided there are no other subscribers to `remoteSessionToken`). If our session token ever expires we can force new data to be loaded by calling `sessionToken.reload()`!
+
+If an external source updates the storage item of the persisted store the two values will go out of sync. In such a case we can call `.resync()` on the store in order to update the store the *parsed* value of the storage item.
+
+We are also able to wipe stored data by calling `clear()` on the store. The storage item will be removed and the value of the store set to `null`.
+
+#### persisted configuration / consent
+
+Persisting data to storage or cookies is subject to privacy laws regarding consent in some jurisdictions. Instead of building two different data flows that depend on whether tracking consent has been given or not, you can instead configure your persisted stores to work in both cases. To do so you will need to call the `configurePersistedConsent` function and pass in a consent checker that will accept a `consent level` and return a boolean indicating whether your user has consented to that level of tracking. You can then provide a consent level when building your persisted stores that will be passed to to the checker before storing data.
+
+*GDPR compliance is easy...*
+
+```javascript
+configurePersistedConsent(
+  (consentLevel) =>  window.consentLevels.includes(consentLevel);
+);
+
+const hasDismissedTooltip = persisted(
+  false, 
+  'TOOLTIP_DISMISSED', 
+  { 
+    storageType: 'COOKIE',
+    consentLevel: 'TRACKING'
+  }
+);
+```
+
+Here we hypothesize a setup where a user's consentLevels are accessible through the window object. We would like to track the dismissal of a tooltip and ideally persist that across page loads. To do so we set up a `hasDismissedTooltip` store that can bet set like any other writable store. If the user has consented to the `TRACKING` consent level, then setting the store will also set a `TOOLTIP_DISMISSED` cookie. Otherwise no data will be persisted and the store will initialize to the default value `false` on each page load.
+
+Note that if no consent level is provided, `undefined` will be passed to the consent checker. This can be handled to provide a default consent for your persisted stores when a consent level is not provided.
+
+### state
+
+State stores are a kind of non-Loadable Readable store that can be generated alongside async stores in order to track their load state. This can be done by passing the `trackState` to the store options during creation. This is particular useful for reloadable or asyncDerived stores which might go into a state of pulling new data.
+
+*State stores can be used to conditionally render our data...*
+
+```javascript
+<script>
+  let searchInput;
+  const searchTerms = writable();
+  const {store: searchResults, state: searchState} = asyncDerived(
+    searchTerms,
+    async ($searchTerms) => {
+      const response = await search($searchTerms);
+      return response.results;
+    },
+    { trackState: true }
+  )
+</script>
+
+<input bind:value={searchInput}>
+  <button on:click={() => searchTerms.set(searchInput)}>search</button>
+  {#if $searchState.isLoading}
+    <SearchTips />
+  {:else if $searchState.isLoaded}
+    <SearchResults results={$searchResults} />
+  {:else if $searchState.isReloading}
+    <ActivityIcon />
+    <SearchResults results={$searchResults} />
+  {:else if $searchState.isError}
+    <SearchError />
+  {/if}
+<input >
+```
+
+We are able to easily track the current activity of our search flow using `trackState`. Our `searchState` will initialize to `LOADING`. When the `searchTerms` store is first set it will `load`, which will kick off `searchTerms` own loading process. After that completes searchState will update to `LOADED`. Any further changes to `searchTerms` will kick off a new load process, at which point `searchTerms` will update to `RELOADING`. We are also able to check summary states: `isPending` is true when `LOADING` or `RELOADING` and `isSettled` is true when `LOADED` or `ERROR`.
+
+Note that trackState is (currently) only available on asyncStores -- asyncReadable, asyncWritable, and asyncDerived.
+
+### asyncClient
+
+An asyncClient is a special kind of store that expands the functionality of another Loadable store. Creating an asyncClient allows you to start accessing the propeties of the object in your store before it has loaded. This is done by transforming all of the object's properties into asynchronous functions that will resolve when the store has loaded.
+
+*Confusing in concept, but simple in practice...*
+
+```javascript
+const logger = asyncClient(readable(
+  undefined,
+  (set) => {
+    addEventListener('LOGGING_READY', () => {
+      set({
+        logError: (error) => window.log('ERROR', error.message),
+        logMessage: (message) => window.log('INFO', message),
+      });
+    })
+  }
+));
+
+logger.logMessage('Logging ready');
+```
+
+In this example we assume a hypothetical flow where a `LOGGING_READY` event is fired upon an external library adding a generic logger to the window object. We create a readable store that loads when this event fires, and set up an object with two functions for logging either errors or non-error messages. If we did not use an asyncClient we would need to call logMessage like so:
+`logger.load().then(($logger) => $logger.logMessage('Logging ready'))`
+However, by turning the readable store into an asyncClient we can instead call `logger.logMessage` immeadietly and the message will be logged when the `LOGGING_READY` event fires.
+
+Note that the asyncClient is still a store, and so can perform all of the store functionality of what it wraps. This means, for example, that you can make an asyncClient of a writable store and have access to the `set` and `update` functions.
+
+Non-function properties of the object loaded by the asyncClient can also be accessed using an async function. I.e. if an asyncClient loads to `{foo: 'bar'}`, `myClient.foo()` will resolve to 'bar' when the asyncClient has loaded.
+The property access for an asyncClient is performed dynamically, and that means that *any* property can attempt to be accessed. If the property can not be found when the asyncClient loads, this will resolve to `undefined`. It is recommended to use typescript to ensure that the accessed properties are members of the store's type.
+
+If a store loads directly to a function, an asyncClient can be used to asynchronously invoke that function.
+
+*We can call loaded functions easily...*
+
+```javascript
+const logMessage = asyncClient(readable(
+  undefined,
+  (set) => {
+    addEventListener('LOGGING_READY', () => {
+      set((message) => window.log('INFO', message));
+    })
+  }
+));
+
+logMessage('Logging ready')
+```
+
+Instead of defining a store that holds an object with function properties, we instead have the store hold a function directly. As before, `logMessage` will be called when the `LOGGING_READY` event fires and the store loads.
+
 ## Additional functions
 
 ### isLoadable and isReloadable
@@ -220,6 +377,64 @@ The safeLoad function works similarly to loadAll, however any loading errors of 
   <ComponentContent/>
 {/await}
 ```
+
+### logAsyncErrors
+
+Using safeLoad or `{#await}{:then}{:catch}` blocks in templates allows you to catch and handle errors that occur during our async stores loading. However this can lead to a visibility problem: if you always catch the errors you may not be aware that your users are experiencing them. To deal with this you can pass an error logger into the `logAsyncErrors` function before you set up your stores. Then any time one of our async stores experiences an error while loading it will automatically call your error logging function regardless of how you handle the error downstream.
+
+### aborting / rebounce (BETA)
+
+Async functionality based on user input is prone to subtle race conditions and async stores are no exception. For example, imagine you want to get a paginated list of items. When the user changes pages a new request is made and then assigned to a `currentItems` variable. If a user changes pages quickly the requests to the items endpoint may resolve in a different order than they were made. If this happens, `currentItems` will reflect the last request to resolve, instead of the last request to be made. Thus the user will see an incorrect page of items.
+
+The solution for this problem is to `abort` old requests and to only resolve the most recent one. This can be performed on fetch requests using [abort controllers](https://developer.mozilla.org/en-US/docs/Web/API/AbortController). To support this pattern, async stores have special handling for rejections of aborted requests. If a store encounters an abort rejection while loading, the store's value will not update, and the rejection will be caught.
+
+While fetch requests have built in abort controller support, async functions do not. Thus the `rebounce` function is provided. It can be used to wrap an async function and automatically abort any in-flight calls when a new call is made.
+
+*Use rebounce to abort stale async calls...*
+
+```javascript
+let currentItems;
+
+const getItems = async (page) => {
+  const results = await itemsRequest(page)
+  return results.items;
+}
+
+const rebouncedGetItems = rebounce(getItems)
+
+const changePage = async (page) => {
+  currentItems = await rebouncedGetItems(page);
+}
+
+changePage(1);
+changePage(2);
+changePage(3);
+```
+
+Without using `rebounce`, `currentItems` would end up equaling the value of `getItems` that *resolves* last. However, when we called the rebounced `getItems` it will equal value of `getItems` that is *called* last. This is because a rebounced function returns a promise that resolves to the returned value of the function, but this promise is aborted when another call to the function is made. This means that when we call `changePage` three times, the first and second calls to `rebouncedGetItems` will reject and only the third call will update `currentItems`.
+
+*Using rebounce with stores is straight forward...*
+
+```javascript
+const rebouncedGetItems = rebounce(
+  async (page) => {
+    const results = await itemsRequest(page)
+    return results.items;
+  },
+  200
+);
+
+const currentItems = asyncDerived(page, ($page) => {
+  return rebouncedGetItems($page);
+});
+```
+
+Here we have created a store for our `currentItems`. Whenever we update the `page` store we will automatically get our new items. By using `rebounce`, `currentItems` will always reflect the most up-to-date `page` value. Note we have also provided a number when calling rebounce. This creates a corresponding millisecond delay before the rebounced function is called. Successive calls within that time frame will abort the previous calls *before* the rebounced function is invoked. This is useful for limiting network requests. In this example, if our user continues to change the page, an `itemsRequest` will not be made until 200 ms has passed since `page` was updated. This means, if our user rapidly clicks through pages 1 to 10, a network request will only be made (and our `currentItems` store updated) when they have settled on page 10.
+
+NOTES:
+
+- In flight rebounces can be manually aborted using `clear`. `rebouncedFunction.clear()`
+- Aborting an async function will cause it to reject, but it will not undo any side effects that have been created! Therefore it is critical that side effects are avoided within the rebounced function. Instead they should instead be performed after the rebounce has resolved.
 
 ## Putting it all Together
 
@@ -254,4 +469,4 @@ module.exports = {
 
 ## Testing
 
-Testing mode can be enabled using the `enableStoreTestingMode` function before running your tests. If testing mode is enabled async stores will include an additional function, `flagForReload`. This function can be called in between tests in order to force stores to reload the next time they are `load`ed. This is useful to test different load conditions for your app, such as endpoint failures.
+Testing mode can be enabled using the `enableStoreTestingMode` function before running your tests. If testing mode is enabled async stores will include an additional function, `reset`. This function can be called in between tests in order to force stores to reset their load state and return to their initial value. This is useful to test different load conditions for your app, such as endpoint failures.
