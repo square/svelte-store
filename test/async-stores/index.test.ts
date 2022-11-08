@@ -647,6 +647,34 @@ describe('asyncWritable', () => {
       );
     });
 
+    it('provides a single asyncReadable parent value if parent is not an array', async () => {
+      const asyncReadableParent = asyncReadable(undefined, mockReload);
+      const myAsyncWritable = asyncWritable(
+        asyncReadableParent,
+        (storeValue) => `derived from ${storeValue}`,
+        (_, $asyncReadableParent) =>
+          Promise.resolve(`${typeof $asyncReadableParent}`)
+      );
+      myAsyncWritable.subscribe(jest.fn);
+
+      await myAsyncWritable.set('set value');
+      expect(get(myAsyncWritable)).toBe('string');
+    });
+
+    it('provides an array as parent value if asyncReadable has a parents array', async () => {
+      const asyncReadableParent = asyncReadable(undefined, mockReload);
+      const myAsyncWritable = asyncWritable(
+        [asyncReadableParent],
+        (storeValue) => `derived from ${storeValue}`,
+        (_, $asyncReadableParent) =>
+          Promise.resolve(`is an array: ${Array.isArray($asyncReadableParent)}`)
+      );
+      myAsyncWritable.subscribe(jest.fn);
+
+      await myAsyncWritable.set('set value');
+      expect(get(myAsyncWritable)).toBe('is an array: true');
+    });
+
     it('reloads reloadable parent', async () => {
       const asyncReadableParent = asyncReadable(undefined, mockReload, {
         reloadable: true,
