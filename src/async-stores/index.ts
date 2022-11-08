@@ -53,9 +53,7 @@ const getLoadState = (stateString: State): LoadState => {
  * to the final value of the store when the asynchronous behavior is complete.
  * @param mappingWriteFunction A function that takes in the new value of the store and uses it to perform async behavior.
  * Typically this would be to persist the change. If this value resolves to a value the store will be set to it.
- * @param reloadable A flag that indicates whether this store should restart its asynchronous behavior whenever `reload`
- * is invoked on this store or any of its children.
- * @param initial The initial value of the store before it is loaded or on load failure. Otherwise undefined.
+ * @param options Modifiers for store behavior.
  * @returns A Loadable store whose value is set to the resolution of provided async behavior.
  * The loaded value of the store will be ready after awaiting the load function of this store.
  */
@@ -276,9 +274,7 @@ export const asyncWritable = <S extends Stores, T>(
  * Any changes to the value of these stores post-load will restart the asynchronous behavior of the store using the new values.
  * @param mappingLoadFunction A function that takes in the values of the stores and generates a Promise that resolves
  * to the final value of the store when the asynchronous behavior is complete.
- * @param reloadable A flag that indicates whether this store should restart its asynchronous behavior whenever `reload`
- * is invoked on this store or any of its children.
- * @param initial The initial value of the store before it is loaded or on load failure. Otherwise undefined.
+ * @param options Modifiers for store behavior.
  * @returns A Loadable store whose value is set to the resolution of provided async behavior.
  * The loaded value of the store will be ready after awaiting the load function of this store.
  */
@@ -310,8 +306,7 @@ export const asyncDerived = <S extends Stores, T>(
  * @param initial The initial value of the store before it has loaded or upon load failure.
  * @param loadFunction A function that generates a Promise that resolves to the final value
  * of the store when the asynchronous behavior is complete.
- * @param reloadable A flag that indicates whether this store should restart its asynchronous behavior whenever `reload`
- * is invoked on this store or any of its children.
+ * @param options Modifiers for store behavior.
  * @returns  A Loadable store whose value is set to the resolution of provided async behavior.
  * The loaded value of the store will be ready after awaiting the load function of this store.
  */
