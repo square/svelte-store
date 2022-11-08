@@ -636,10 +636,7 @@ describe('asyncWritable', () => {
         (storeValue) => `derived from ${storeValue}`,
         (value, $asyncReadableParent) =>
           Promise.resolve(
-            `constructed from ${value} and ${JSON.stringify(
-              $asyncReadableParent
-              // remove leading and trailing quotes
-            ).slice(1, -1)}`
+            `constructed from ${value} and ${$asyncReadableParent}`
           )
       );
       myAsyncWritable.subscribe(jest.fn);
@@ -648,6 +645,34 @@ describe('asyncWritable', () => {
       expect(get(myAsyncWritable)).toBe(
         'constructed from set value and first value'
       );
+    });
+
+    it('provides a single asyncReadable parent value if parent is not an array', async () => {
+      const asyncReadableParent = asyncReadable(undefined, mockReload);
+      const myAsyncWritable = asyncWritable(
+        asyncReadableParent,
+        (storeValue) => `derived from ${storeValue}`,
+        (_, $asyncReadableParent) =>
+          Promise.resolve(`${typeof $asyncReadableParent}`)
+      );
+      myAsyncWritable.subscribe(jest.fn);
+
+      await myAsyncWritable.set('set value');
+      expect(get(myAsyncWritable)).toBe('string');
+    });
+
+    it('provides an array as parent value if asyncReadable has a parents array', async () => {
+      const asyncReadableParent = asyncReadable(undefined, mockReload);
+      const myAsyncWritable = asyncWritable(
+        [asyncReadableParent],
+        (storeValue) => `derived from ${storeValue}`,
+        (_, $asyncReadableParent) =>
+          Promise.resolve(`is an array: ${Array.isArray($asyncReadableParent)}`)
+      );
+      myAsyncWritable.subscribe(jest.fn);
+
+      await myAsyncWritable.set('set value');
+      expect(get(myAsyncWritable)).toBe('is an array: true');
     });
 
     it('reloads reloadable parent', async () => {
