@@ -35,7 +35,6 @@
   },
   "devDependencies": {
     "@types/jest": "^27.0.2",
-    "@types/js-cookie": "^3.0.2",
     "@typescript-eslint/eslint-plugin": "^4.31.2",
     "@typescript-eslint/parser": "^4.31.2",
     "eslint": "^7.32.0",
@@ -45,7 +44,7 @@
     "typescript": "^4.5.5"
   },
   "dependencies": {
-    "js-cookie": "^3.0.1",
+    "cookie-storage": "^6.1.0",
     "svelte": "^3.0.0"
   },
   "license": "ISC",
