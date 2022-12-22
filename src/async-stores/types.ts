@@ -12,16 +12,18 @@ export type LoadState = {
   isSettled: boolean; // LOADED or ERROR
 };
 
+export type VisitedMap = WeakMap<Readable<unknown>, Promise<unknown>>;
+
 export interface Loadable<T> extends Readable<T> {
   load(): Promise<T>;
-  reload?(): Promise<T>;
+  reload?(visitedMap?: VisitedMap): Promise<T>;
   state?: Readable<LoadState>;
   reset?(): void;
   store: Loadable<T>;
 }
 
 export interface Reloadable<T> extends Loadable<T> {
-  reload(): Promise<T>;
+  reload(visitedMap?: VisitedMap): Promise<T>;
 }
 
 export interface AsyncWritable<T> extends Writable<T> {

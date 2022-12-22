@@ -1,5 +1,6 @@
 import { get, type Readable } from 'svelte/store';
 import {
+  VisitedMap,
   type Loadable,
   type Reloadable,
   type Stores,
@@ -51,11 +52,18 @@ export const loadAll = <S extends Stores>(
  * Non Loadables will resolve immediately.
  */
 export const reloadAll = <S extends Stores>(
-  stores: S
+  stores: S,
+  visitedMap?: VisitedMap
 ): Promise<StoresValues<S>> => {
+  const visitMap = visitedMap ?? new WeakMap();
+
   const reloadPromises = getStoresArray(stores).map((store) => {
     if (Object.prototype.hasOwnProperty.call(store, 'reload')) {
-      return (store as Loadable<unknown>).reload();
+      // only reload if store has not already been visited
+      if (!visitMap.has(store)) {
+        visitMap.set(store, (store as Loadable<unknown>).reload(visitMap));
+      }
+      return visitMap.get(store);
     } else if (Object.prototype.hasOwnProperty.call(store, 'load')) {
       return (store as Loadable<unknown>).load();
     } else {

@@ -10,29 +10,32 @@ import {
   writable as vanillaWritable,
 } from 'svelte/store';
 import { anyReloadable, loadAll, reloadAll } from '../utils';
-import type { Loadable, Stores, StoresValues } from '../async-stores/types';
+import type {
+  Loadable,
+  Stores,
+  StoresValues,
+  VisitedMap,
+} from '../async-stores/types';
 
-const loadDependencies = <S extends Stores, T>(
+const loadDependencies = async <S extends Stores, T>(
   thisStore: Readable<T>,
   loadFunction: (stores: S) => Promise<unknown>,
   stores: S
-): (() => Promise<T>) => {
-  return async () => {
-    // Create a dummy subscription when we load the store.
-    // This ensures that we will have at least one subscriber when
-    // loading the store so that our start function will run.
-    const dummyUnsubscribe = thisStore.subscribe(() => {
-      /* no-op */
-    });
-    try {
-      await loadFunction(stores);
-    } catch (error) {
-      dummyUnsubscribe();
-      throw error;
-    }
+): Promise<T> => {
+  // Create a dummy subscription when we load the store.
+  // This ensures that we will have at least one subscriber when
+  // loading the store so that our start function will run.
+  const dummyUnsubscribe = thisStore.subscribe(() => {
+    /* no-op */
+  });
+  try {
+    await loadFunction(stores);
+  } catch (error) {
     dummyUnsubscribe();
-    return get(thisStore);
-  };
+    throw error;
+  }
+  dummyUnsubscribe();
+  return get(thisStore);
 };
 
 type DerivedMapper<S extends Stores, T> = (values: StoresValues<S>) => T;
@@ -78,9 +81,13 @@ export function derived<S extends Stores, T>(
   initialValue?: T
 ): Loadable<T> {
   const thisStore = vanillaDerived(stores, fn as any, initialValue);
-  const load = loadDependencies(thisStore, loadAll, stores);
+  const load = () => loadDependencies(thisStore, loadAll, stores);
   const reload = anyReloadable(stores)
-    ? loadDependencies(thisStore, reloadAll, stores)
+    ? (visitedMap?: VisitedMap) => {
+        const visitMap = visitedMap ?? new WeakMap();
+        const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
+        return loadDependencies(thisStore, reloadAndTrackVisits, stores);
+      }
     : undefined;
 
   return {

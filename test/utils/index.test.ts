@@ -55,6 +55,14 @@ describe('loadAll / reloadAll utils', () => {
         new Error('F')
       );
     });
+
+    it('does not reload already visited store', () => {
+      const visitedMap = new WeakMap();
+      visitedMap.set(myReloadable, Promise.resolve('already reloaded'));
+      expect(reloadAll(myReloadable, visitedMap)).resolves.toStrictEqual([
+        'already reloaded',
+      ]);
+    });
   });
 
   describe('safeLoad function', () => {
