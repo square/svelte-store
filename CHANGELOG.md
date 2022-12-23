@@ -1,5 +1,13 @@
 # Changelog #
 
+## 1.0.12 (2022-12-23)
+
+- fix: reloading child with mutliple routes to ancestor now reloads ancestor once
+
+## 1.0.11 (2022-11-08)
+
+-fix: writable with single parent calls setter with array
+
 ## 1.0.10 (2022-11-07)
 
 - *BREAKING CHANGE* feat: stores now take an options object instead of separate parameters for reloadable and initial
