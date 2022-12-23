@@ -166,6 +166,24 @@ describe('asyncWritable', () => {
       expect(myAsyncDerived.load()).resolves.toBe('derived from second value');
     });
 
+    it('reloads once when children reload', async () => {
+      const asyncReadableParent = asyncReadable(undefined, mockReload, {
+        reloadable: true,
+      });
+      const childA = derived(asyncReadableParent, (storeValue) => storeValue);
+      const childB = derived(asyncReadableParent, (storeValue) => storeValue);
+      const grandChild = derived(
+        [childA, childB],
+        ([$childA, $childB]) => $childA + $childB
+      );
+
+      await grandChild.load();
+      expect(get(grandChild)).toBe('first valuefirst value');
+      await grandChild.reload();
+      expect(get(grandChild)).toBe('second valuesecond value');
+      expect(mockReload).toHaveBeenCalledTimes(2);
+    });
+
     it('rejects load when parent load fails', () => {
       const asyncReadableParent = asyncReadable(undefined, () =>
         Promise.reject(new Error('error'))

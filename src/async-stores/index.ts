@@ -7,6 +7,7 @@ import type {
   Stores,
   StoresValues,
   WritableLoadable,
+  VisitedMap,
 } from './types';
 import { anyReloadable, getStoresArray, reloadAll, loadAll } from '../utils';
 
@@ -232,9 +233,14 @@ export const asyncWritable = <S extends Stores, T>(
   // // optional properties
   const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
   const reload = hasReloadFunction
-    ? async () => {
+    ? async (visitedMap?: VisitedMap) => {
+        const visitMap = visitedMap ?? new WeakMap();
+        const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
         setState('RELOADING');
-        const result = await loadDependenciesThenSet(reloadAll, reloadable);
+        const result = await loadDependenciesThenSet(
+          reloadAndTrackVisits,
+          reloadable
+        );
         setState('LOADED');
         return result;
       }
