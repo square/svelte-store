@@ -14,12 +14,19 @@ import { AsyncClient } from './types';
 export const asyncClient = <S extends Loadable<unknown>>(
   loadable: S
 ): S & AsyncClient<StoresValues<S>> => {
-  return new Proxy(Function.prototype, {
-    get: (functionProto, property) => {
-      if (functionProto[property]) {
+  // Generate an empty function that will be proxied.
+  // This lets us invoke the resulting asyncClient.
+  // An anonymous function is used instead of the function prototype
+  // so that testing environments can tell asyncClients apart.
+  const emptyFunction = () => {
+    /* no op*/
+  };
+  return new Proxy(emptyFunction, {
+    get: (proxiedFunction, property) => {
+      if (proxiedFunction[property]) {
         // this ensures that jest is able to identify the proxy
         // when setting up spies on its properties
-        return functionProto[property];
+        return proxiedFunction[property];
       }
       if (loadable[property]) {
         return loadable[property];
