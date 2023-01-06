@@ -53,4 +53,20 @@ describe('asyncClient', () => {
     expect(result).toBe('some string');
     expect(myFuncSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('can mock multiple async clients', async () => {
+    const clientA = asyncClient(
+      readable<{ myFunc: () => string }>({ myFunc: () => 'clientA' })
+    );
+    const clientB = asyncClient(readable({ myFunc: () => 'clientB' }));
+
+    const subscribe = jest.spyOn(clientA, 'subscribe');
+    subscribe.mockImplementation((callbackFn) => {
+      callbackFn({ myFunc: () => 'mockedA' });
+      return jest.fn();
+    });
+
+    expect(get(clientA).myFunc()).toBe('mockedA');
+    expect(get(clientB).myFunc()).toBe('clientB');
+  });
 });
