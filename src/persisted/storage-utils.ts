@@ -1,4 +1,6 @@
-import * as Cookies from 'js-cookie';
+import { CookieStorage } from "cookie-storage";
+
+const cookieStorage = new CookieStorage();
 
 export const getLocalStorageItem = (key: string): string | null => {
   return window.localStorage.getItem(key);
@@ -25,13 +27,13 @@ export const removeSessionStorageItem = (key: string): void => {
 };
 
 export const getCookie = (key: string): string | null => {
-  return Cookies.get(key) || null;
+  return cookieStorage.getItem(key) || null;
 };
 
 export const setCookie = (key: string, value: string): void => {
-  Cookies.set(key, value);
+  cookieStorage.setItem(key, value);
 };
 
 export const removeCookie = (key: string): void => {
-  Cookies.remove(key);
+  cookieStorage.removeItem(key);
 };
