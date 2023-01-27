@@ -1,9 +1,15 @@
+import { flagStoreCreated } from '../src/config';
 import {
   asyncReadable,
   get,
+  derived,
   enableStoreTestingMode,
   readable,
   asyncClient,
+  asyncWritable,
+  asyncDerived,
+  persisted,
+  writable,
 } from '../src/index';
 
 enableStoreTestingMode();
@@ -54,7 +60,7 @@ describe('asyncClient', () => {
     expect(myFuncSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('can mock multiple async clients', async () => {
+  it('can mock multiple async clients', () => {
     const clientA = asyncClient(
       readable<{ myFunc: () => string }>({ myFunc: () => 'clientA' })
     );
@@ -68,5 +74,23 @@ describe('asyncClient', () => {
 
     expect(get(clientA).myFunc()).toBe('mockedA');
     expect(get(clientB).myFunc()).toBe('clientB');
+  });
+});
+
+describe('enableStoreTestingMode', () => {
+  it('throws when store already created', () => {
+    [
+      asyncWritable,
+      asyncDerived,
+      asyncReadable,
+      derived,
+      writable,
+      readable,
+      persisted,
+    ].forEach((store: CallableFunction) => {
+      flagStoreCreated(false);
+      store([], jest.fn);
+      expect(() => enableStoreTestingMode()).toThrowError();
+    });
   });
 });

@@ -16,18 +16,12 @@ export type {
   WritableLoadable,
   AsyncStoreOptions,
   Stores,
+  StoresValues,
 } from './async-stores/types';
 export type { StorageType, StorageOptions, Persisted } from './persisted/types';
 
 export { asyncClient } from './async-client';
-export {
-  getStoreTestingMode,
-  enableStoreTestingMode,
-  logAsyncErrors,
-  asyncWritable,
-  asyncDerived,
-  asyncReadable,
-} from './async-stores';
+export { asyncWritable, asyncDerived, asyncReadable } from './async-stores';
 export { configurePersistedConsent, persisted } from './persisted';
 export { derived, readable, writable } from './standard-stores';
 export {
@@ -40,3 +34,8 @@ export {
   safeLoad,
   rebounce,
 } from './utils';
+export {
+  getStoreTestingMode,
+  enableStoreTestingMode,
+  logAsyncErrors,
+} from './config';

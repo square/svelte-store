@@ -16,6 +16,7 @@ import type {
   StoresValues,
   VisitedMap,
 } from '../async-stores/types';
+import { flagStoreCreated } from '../config';
 
 const loadDependencies = async <S extends Stores, T>(
   thisStore: Readable<T>,
@@ -80,6 +81,8 @@ export function derived<S extends Stores, T>(
   fn: DerivedMapper<S, T> | SubscribeMapper<S, T>,
   initialValue?: T
 ): Loadable<T> {
+  flagStoreCreated();
+
   const thisStore = vanillaDerived(stores, fn as any, initialValue);
   const load = () => loadDependencies(thisStore, loadAll, stores);
   const reload = anyReloadable(stores)
@@ -109,6 +112,7 @@ export const writable = <T>(
   value?: T,
   start?: StartStopNotifier<T>
 ): Writable<T> & Loadable<T> => {
+  flagStoreCreated();
   let hasEverLoaded = false;
 
   let resolveLoadPromise: (value: T | PromiseLike<T>) => void;
