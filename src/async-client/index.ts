@@ -1,5 +1,6 @@
 import { Loadable, StoresValues } from '../async-stores/types';
 import { AsyncClient } from './types';
+import { get } from 'svelte/store';
 
 /**
  * Generates an AsyncClient from a Loadable store. The AsyncClient will have all
@@ -47,6 +48,31 @@ export const asyncClient = <S extends Loadable<unknown>>(
         return Reflect.apply(storeValue, storeValue, argumentsList);
       }
       return storeValue;
+    },
+    has: (proxiedFunction, property) => {
+      const proxiedFunctionHasProperty: boolean =
+        Object.prototype.hasOwnProperty.call(proxiedFunction, property);
+
+      if (proxiedFunctionHasProperty) {
+        return proxiedFunctionHasProperty;
+      }
+
+      const loadableHasProperty: boolean = Object.prototype.hasOwnProperty.call(
+        loadable,
+        property
+      );
+
+      if (loadableHasProperty) {
+        return loadableHasProperty;
+      }
+
+      const value = get(loadable);
+
+      if (value) {
+        return Object.prototype.hasOwnProperty.call(value, property);
+      }
+
+      return false;
     },
   }) as unknown as S & AsyncClient<StoresValues<S>>;
 };
