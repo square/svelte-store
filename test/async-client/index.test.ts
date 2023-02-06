@@ -30,4 +30,14 @@ describe('asyncClient', () => {
     const result = await resultPromise;
     expect(result).toBe('input + output');
   });
+
+  it("correctly identifies the existence of properties with the 'in' operator", () => {
+    const myClient = asyncClient(writable<unknown>());
+
+    expect('foo' in myClient).toBe(false);
+
+    myClient.set({ foo: true });
+
+    expect('foo' in myClient).toBe(true);
+  });
 });
