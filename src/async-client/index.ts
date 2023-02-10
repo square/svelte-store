@@ -49,29 +49,27 @@ export const asyncClient = <S extends Loadable<unknown>>(
       }
       return storeValue;
     },
+    set: (proxiedFunction, property, value) => {
+      return Reflect.set(loadable, property, value);
+    },
+    defineProperty(proxiedFunction, property, value) {
+      return Reflect.defineProperty(loadable, property, value);
+    },
     has: (proxiedFunction, property) => {
-      const proxiedFunctionHasProperty: boolean =
-        Object.prototype.hasOwnProperty.call(proxiedFunction, property);
-
-      if (proxiedFunctionHasProperty) {
-        return proxiedFunctionHasProperty;
+      if (property in proxiedFunction) {
+        return true;
       }
 
-      const loadableHasProperty: boolean = Object.prototype.hasOwnProperty.call(
-        loadable,
-        property
-      );
-
-      if (loadableHasProperty) {
-        return loadableHasProperty;
+      if (property in loadable) {
+        return true;
       }
 
       const value = get(loadable);
 
-      if (value) {
-        return Object.prototype.hasOwnProperty.call(value, property);
+      if (value && value instanceof Object) {
+        // eslint-disable-next-line @typescript-eslint/ban-types
+        return property in (value as object);
       }
-
       return false;
     },
   }) as unknown as S & AsyncClient<StoresValues<S>>;

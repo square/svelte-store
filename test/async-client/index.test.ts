@@ -31,13 +31,84 @@ describe('asyncClient', () => {
     expect(result).toBe('input + output');
   });
 
-  it("correctly identifies the existence of properties with the 'in' operator", () => {
-    const myClient = asyncClient(writable<unknown>());
+  describe("'in' operator", () => {
+    it('correctly identifies the existence of own properties', () => {
+      const myClient = asyncClient(writable<unknown>());
 
-    expect('foo' in myClient).toBe(false);
+      expect('foo' in myClient).toBe(false);
 
-    myClient.set({ foo: true });
+      myClient.set({ foo: true });
 
-    expect('foo' in myClient).toBe(true);
+      expect('foo' in myClient).toBe(true);
+    });
+
+    it('correctly identifies the existence of inherited properties', () => {
+      const myClient = asyncClient(writable<unknown>());
+
+      expect('foo' in myClient).toBe(false);
+      expect('bar' in myClient).toBe(false);
+
+      class MyClass {
+        foo = true;
+      }
+
+      class MyChildClass extends MyClass {
+        bar = true;
+      }
+
+      myClient.set(new MyChildClass());
+
+      expect('foo' in myClient).toBe(true);
+      expect('bar' in myClient).toBe(true);
+    });
+  });
+
+  describe('Setting properties', () => {
+    type MyClient = {
+      foo: boolean;
+      bar?: () => void;
+    };
+
+    it("'set' proxy handler", () => {
+      const myMock = jest.fn();
+
+      const myWritable = writable<MyClient>();
+
+      const myClient = asyncClient(myWritable);
+
+      myClient.set({ foo: true });
+
+      myClient.bar = myMock;
+
+      expect(Object.prototype.hasOwnProperty.call(myWritable, 'bar')).toBe(
+        true
+      );
+      expect('bar' in myClient).toBe(true);
+
+      myClient.bar();
+
+      expect(myMock).toHaveBeenCalled();
+    });
+
+    it("'defineProperty' proxy handler", () => {
+      const myMock = jest.fn();
+
+      const myWritable = writable<MyClient>();
+
+      const myClient = asyncClient(myWritable);
+
+      myClient.set({ foo: true });
+
+      Object.defineProperty(myClient, 'bar', { value: myMock });
+
+      expect(Object.prototype.hasOwnProperty.call(myWritable, 'bar')).toBe(
+        true
+      );
+      expect('bar' in myClient).toBe(true);
+
+      myClient.bar();
+
+      expect(myMock).toHaveBeenCalled();
+    });
   });
 });
