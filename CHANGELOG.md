@@ -1,5 +1,14 @@
 # Changelog #
 
+## 1.0.14 (2022-2-10)
+
+- fix: add additional property support for asyncClients to allow for better mocking/testing
+
+## 1.0.13 (2022-1-6)
+
+- fix: allow asyncClients to be seperately mocked
+- use cookie-storage instead js-cookie
+
 ## 1.0.12 (2022-12-23)
 
 - fix: reloading child with mutliple routes to ancestor now reloads ancestor once
