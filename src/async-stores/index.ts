@@ -10,23 +10,7 @@ import type {
   VisitedMap,
 } from './types';
 import { anyReloadable, getStoresArray, reloadAll, loadAll } from '../utils';
-
-// CONFIGURATION OPTIONS
-
-let testingMode = false;
-
-export const getStoreTestingMode = (): boolean => testingMode;
-
-export const enableStoreTestingMode = (): void => {
-  testingMode = true;
-};
-
-type ErrorLogger = (e: Error) => void;
-let logError: ErrorLogger;
-
-export const logAsyncErrors = (logger: ErrorLogger): void => {
-  logError = logger;
-};
+import { flagStoreCreated, getStoreTestingMode, logError } from '../config';
 
 // STORES
 
@@ -68,6 +52,7 @@ export const asyncWritable = <S extends Stores, T>(
   ) => Promise<void | T>,
   options: AsyncStoreOptions<T> = {}
 ): WritableLoadable<T> => {
+  flagStoreCreated();
   const { reloadable, trackState, initial } = options;
 
   const loadState = trackState
@@ -91,9 +76,7 @@ export const asyncWritable = <S extends Stores, T>(
       return await mappingLoadFunction(values);
     } catch (e) {
       if (e.name !== 'AbortError') {
-        if (logError) {
-          logError(e);
-        }
+        logError(e);
         setState('ERROR');
       }
       throw e;
@@ -212,9 +195,7 @@ export const asyncWritable = <S extends Stores, T>(
           currentLoadPromise = currentLoadPromise.then(() => writeResponse);
         }
       } catch (e) {
-        if (logError) {
-          logError(e);
-        }
+        logError(e);
         setState('ERROR');
         throw e;
       }
@@ -249,7 +230,7 @@ export const asyncWritable = <S extends Stores, T>(
   const state: Readable<LoadState> = loadState
     ? { subscribe: loadState.subscribe }
     : undefined;
-  const reset = testingMode
+  const reset = getStoreTestingMode()
     ? () => {
         thisStore.set(initial);
         setState('LOADING');

@@ -150,6 +150,24 @@ describe('persisted', () => {
           expect(get(myStorage)).toBe('default');
           expect(myStorage.load()).resolves.toBe('default');
         });
+
+        it('handles = characters', async () => {
+          setStorage('key', JSON.stringify('a=b'));
+          const myStorage = persisted('c=d', 'key', {
+            storageType,
+            reloadable: true,
+          });
+
+          let $storageA = await myStorage.load();
+
+          expect($storageA).toBe('a=b');
+          expect(JSON.parse(getStorage('key'))).toBe('a=b');
+
+          $storageA = await myStorage.reload();
+
+          expect($storageA).toBe('c=d');
+          expect(JSON.parse(getStorage('key'))).toBe('c=d');
+        });
       });
 
       describe('using Loadable initial', () => {
