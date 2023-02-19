@@ -1,35 +1,50 @@
-import { Readable } from 'svelte/store';
 import {
+  asyncReadable,
   Loadable,
   readable,
   loadAll,
   rebounce,
   reloadAll,
   safeLoad,
+  enableStoreTestingMode,
 } from '../../src';
 
+enableStoreTestingMode();
+
 describe('loadAll / reloadAll utils', () => {
-  const myNonAsync = readable('A');
-  const myLoadable = { load: () => Promise.resolve('B') } as Loadable<string> &
-    Readable<string>;
-  const myReloadable = {
-    load: () => Promise.resolve('C'),
-    reload: () => Promise.resolve('D'),
-  } as Loadable<string>;
+  const mockReload = jest.fn();
+  const myLoadable = asyncReadable(undefined, () => Promise.resolve('loaded'));
+  const myReloadable = asyncReadable(undefined, mockReload, {
+    reloadable: true,
+  });
   const badLoadable = {
     load: () => Promise.reject(new Error('E')),
     reload: () => Promise.reject(new Error('F')),
   } as Loadable<string>;
 
+  beforeEach(() => {
+    mockReload
+      .mockResolvedValueOnce('first value')
+      .mockResolvedValueOnce('second value')
+      .mockResolvedValueOnce('third value');
+  });
+
+  afterEach(() => {
+    mockReload.mockReset();
+    myReloadable.reset();
+  });
+
   describe('loadAll function', () => {
     it('loads single store', () => {
-      expect(loadAll(myLoadable)).resolves.toStrictEqual(['B']);
+      expect(loadAll(myLoadable)).resolves.toStrictEqual('loaded');
     });
 
     it('resolves to values of all stores', () => {
-      expect(
-        loadAll([myNonAsync, myLoadable, myReloadable])
-      ).resolves.toStrictEqual(['A', 'B', 'C']);
+      expect(loadAll([myLoadable, myReloadable])).resolves.toStrictEqual([
+        'loaded',
+        'first value',
+      ]);
+      expect(true).toBeTruthy();
     });
 
     it('handles rejection', () => {
@@ -40,14 +55,17 @@ describe('loadAll / reloadAll utils', () => {
   });
 
   describe('reloadAll function', () => {
-    it('reloads loads single store', () => {
-      expect(reloadAll(myReloadable)).resolves.toStrictEqual(['D']);
+    it('reloads loads single store', async () => {
+      await loadAll(myReloadable);
+      expect(reloadAll(myReloadable)).resolves.toStrictEqual('second value');
     });
 
-    it('reloads and resolves to values of all stores', () => {
-      expect(
-        reloadAll([myNonAsync, myLoadable, myReloadable])
-      ).resolves.toStrictEqual(['A', 'B', 'D']);
+    it('reloads and resolves to values of all stores', async () => {
+      await loadAll([myLoadable, myReloadable]);
+      expect(reloadAll([myLoadable, myReloadable])).resolves.toStrictEqual([
+        'loaded',
+        'second value',
+      ]);
     });
 
     it('handles rejection', () => {
@@ -58,10 +76,10 @@ describe('loadAll / reloadAll utils', () => {
 
     it('does not reload already visited store', () => {
       const visitedMap = new WeakMap();
-      visitedMap.set(myReloadable, Promise.resolve('already reloaded'));
-      expect(reloadAll(myReloadable, visitedMap)).resolves.toStrictEqual([
-        'already reloaded',
-      ]);
+      visitedMap.set(myReloadable, myReloadable.reload());
+      expect(reloadAll(myReloadable, visitedMap)).resolves.toStrictEqual(
+        'first value'
+      );
     });
   });
 

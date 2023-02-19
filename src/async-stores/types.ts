@@ -39,16 +39,18 @@ export interface AsyncStoreOptions<T> {
   trackState?: true;
   initial?: T;
 }
-
-/* These types come from Svelte but are not exported, so copying them here */
-/* One or more `Readable`s. */
-export declare type Stores =
-  | Readable<unknown>
+export declare type StoresArray =
   | [Readable<unknown>, ...Array<Readable<unknown>>]
   | Array<Readable<unknown>>;
+/* These types come from Svelte but are not exported, so copying them here */
+/* One or more `Readable`s. */
+export declare type Stores = Readable<unknown> | StoresArray;
+
+export declare type ValuesArray<T> = {
+  [K in keyof T]: T[K] extends Readable<infer U> ? U : never;
+};
+
 /** One or more values from `Readable` stores. */
 export declare type StoresValues<T> = T extends Readable<infer U>
   ? U
-  : {
-      [K in keyof T]: T[K] extends Readable<infer U> ? U : never;
-    };
+  : ValuesArray<T>;

@@ -1,5 +1,6 @@
-import { get, Unsubscriber, writable, type Readable } from 'svelte/store';
+import { get } from 'svelte/store';
 import {
+  StoresArray,
   VisitedMap,
   type Loadable,
   type Reloadable,
@@ -7,7 +8,7 @@ import {
   type StoresValues,
 } from '../async-stores/types';
 
-export const getStoresArray = (stores: Stores): Readable<unknown>[] => {
+export const getStoresArray = (stores: Stores): StoresArray => {
   return Array.isArray(stores) ? stores : [stores];
 };
 
@@ -23,13 +24,20 @@ export const anyLoadable = (stores: Stores): boolean =>
 export const anyReloadable = (stores: Stores): boolean =>
   getStoresArray(stores).some(isReloadable);
 
+export const getAll = <S extends Stores>(stores: S): StoresValues<S> => {
+  const valuesArray = getStoresArray(stores).map((store) =>
+    get(store)
+  ) as unknown as StoresValues<S>;
+  return Array.isArray(stores) ? valuesArray : valuesArray[0];
+};
+
 /**
  * Load a number of Stores. Loading a store will first await loadAll of any parents.
  * @param stores Any Readable or array of Readables to await loading of.
  * @returns Promise that resolves to an array of the loaded values of the input stores.
  * Non Loadables will resolve immediately.
  */
-export const loadAll = <S extends Stores>(
+export const loadAll = async <S extends Stores>(
   stores: S
 ): Promise<StoresValues<S>> => {
   const loadPromises = getStoresArray(stores).map((store) => {
@@ -40,7 +48,9 @@ export const loadAll = <S extends Stores>(
     }
   });
 
-  return Promise.all(loadPromises) as Promise<StoresValues<S>>;
+  await Promise.all(loadPromises);
+
+  return getAll(stores);
 };
 
 /**
@@ -51,7 +61,7 @@ export const loadAll = <S extends Stores>(
  * @returns Promise that resolves to an array of the loaded values of the input stores.
  * Non Loadables will resolve immediately.
  */
-export const reloadAll = <S extends Stores>(
+export const reloadAll = async <S extends Stores>(
   stores: S,
   visitedMap?: VisitedMap
 ): Promise<StoresValues<S>> => {
@@ -71,7 +81,9 @@ export const reloadAll = <S extends Stores>(
     }
   });
 
-  return Promise.all(reloadPromises) as Promise<StoresValues<S>>;
+  await Promise.all(reloadPromises);
+
+  return getAll(stores);
 };
 
 /**
