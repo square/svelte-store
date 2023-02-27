@@ -1,5 +1,13 @@
 # Changelog #
 
+## 1.0.15 (2022-2-27)
+
+- *BREAKING CHANGE* fix: loadAll/reloadAll resolve with up-to-date store values
+  - How to migrate:
+    - Using loadAll/reloadAll with a single store (not an array) now resolves to a single value (not in an array). If you are indexing into the array, this must be changed to use the value directly.
+    - When loadAll/reloadAll resolves it gives you the store values at that moment. Previously it would give you the values of the stores current load process at the time loadAll/reloadAll was called. This means updates made to stores while loadAll/reloadAll is still pending will now be reflected in the resolved values. If you wish to avoid this behavior for specific stores, you must now load them individually.
+- feat: throw an error when testing mode enabled after store creation
+
 ## 1.0.14 (2022-2-10)
 
 - fix: add additional property support for asyncClients to allow for better mocking/testing
