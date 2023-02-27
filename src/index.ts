@@ -29,6 +29,7 @@ export {
   isReloadable,
   anyLoadable,
   anyReloadable,
+  getAll,
   loadAll,
   reloadAll,
   safeLoad,
