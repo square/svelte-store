@@ -1,5 +1,5 @@
-import { Loadable, StoresValues } from '../async-stores/types';
-import { AsyncClient } from './types';
+import { Loadable, StoresValues } from '../async-stores/types.js';
+import { AsyncClient } from './types.js';
 import { get } from 'svelte/store';
 
 /**

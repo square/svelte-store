@@ -7,7 +7,7 @@ export type {
   Subscriber,
   Writable,
 } from 'svelte/store';
-export type { AsyncClient } from './async-client/types';
+export type { AsyncClient } from './async-client/types.js';
 export type {
   LoadState,
   Loadable,
@@ -17,13 +17,13 @@ export type {
   AsyncStoreOptions,
   Stores,
   StoresValues,
-} from './async-stores/types';
-export type { StorageType, StorageOptions, Persisted } from './persisted/types';
+} from './async-stores/types.js';
+export type { StorageType, StorageOptions, Persisted } from './persisted/types.js';
 
-export { asyncClient } from './async-client';
-export { asyncWritable, asyncDerived, asyncReadable } from './async-stores';
-export { configurePersistedConsent, persisted } from './persisted';
-export { derived, readable, writable } from './standard-stores';
+export { asyncClient } from './async-client/index.js';
+export { asyncWritable, asyncDerived, asyncReadable } from './async-stores/index.js';
+export { configurePersistedConsent, persisted } from './persisted/index.js';
+export { derived, readable, writable } from './standard-stores/index.js';
 export {
   isLoadable,
   isReloadable,
@@ -34,9 +34,9 @@ export {
   reloadAll,
   safeLoad,
   rebounce,
-} from './utils';
+} from './utils/index.js';
 export {
   getStoreTestingMode,
   enableStoreTestingMode,
   logAsyncErrors,
-} from './config';
+} from './config.js';
