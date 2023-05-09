@@ -6,6 +6,7 @@ import {
   type Reloadable,
   type Stores,
   type StoresValues,
+  ValuesArray,
 } from '../async-stores/types';
 
 export const getStoresArray = (stores: Stores): StoresArray => {
@@ -28,7 +29,9 @@ export const getAll = <S extends Stores>(stores: S): StoresValues<S> => {
   const valuesArray = getStoresArray(stores).map((store) =>
     get(store)
   ) as unknown as StoresValues<S>;
-  return Array.isArray(stores) ? valuesArray : valuesArray[0];
+  return Array.isArray(stores)
+    ? valuesArray
+    : (valuesArray as ValuesArray<S>)[0];
 };
 
 /**
@@ -71,7 +74,10 @@ export const reloadAll = async <S extends Stores>(
     if (Object.prototype.hasOwnProperty.call(store, 'reload')) {
       // only reload if store has not already been visited
       if (!visitMap.has(store)) {
-        visitMap.set(store, (store as Loadable<unknown>).reload(visitMap));
+        visitMap.set(
+          store,
+          (store as Loadable<unknown>).reload?.(visitMap) ?? Promise.resolve()
+        );
       }
       return visitMap.get(store);
     } else if (Object.prototype.hasOwnProperty.call(store, 'load')) {
@@ -139,7 +145,7 @@ export const rebounce = <T, U>(
         const result = await Promise.resolve(callback(...args));
         currentResolve(result);
       } catch (error) {
-        currentReject(error);
+        currentReject(error as Error);
       }
     };
 

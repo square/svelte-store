@@ -48,7 +48,7 @@ export declare type Stores = Readable<unknown> | StoresArray;
 
 export declare type ValuesArray<T> = {
   [K in keyof T]: T[K] extends Readable<infer U> ? U : never;
-};
+} & Array<any>;
 
 /** One or more values from `Readable` stores. */
 export declare type StoresValues<T> = T extends Readable<infer U>

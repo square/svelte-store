@@ -24,17 +24,17 @@ export const asyncClient = <S extends Loadable<unknown>>(
   };
   return new Proxy(emptyFunction, {
     get: (proxiedFunction, property) => {
-      if (proxiedFunction[property]) {
+      if ((proxiedFunction as any)[property]) {
         // this ensures that jest is able to identify the proxy
         // when setting up spies on its properties
-        return proxiedFunction[property];
+        return (proxiedFunction as any)[property];
       }
-      if (loadable[property]) {
-        return loadable[property];
+      if ((loadable as any)[property]) {
+        return (loadable as any)[property];
       }
       return async (...argumentsList: unknown[]) => {
         const storeValue = await loadable.load();
-        const original = storeValue[property];
+        const original = (storeValue as any)[property];
         if (typeof original === 'function') {
           return Reflect.apply(original, storeValue, argumentsList);
         } else {

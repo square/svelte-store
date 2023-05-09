@@ -1,4 +1,10 @@
-import { get, type Updater, type Readable, writable } from 'svelte/store';
+import {
+  get,
+  type Updater,
+  type Readable,
+  writable,
+  Writable,
+} from 'svelte/store';
 import type {
   AsyncStoreOptions,
   Loadable,
@@ -8,6 +14,7 @@ import type {
   StoresValues,
   WritableLoadable,
   VisitedMap,
+  ValuesArray,
 } from './types';
 import { anyReloadable, getStoresArray, reloadAll, loadAll } from '../utils';
 import { flagStoreCreated, getStoreTestingMode, logError } from '../config';
@@ -63,7 +70,7 @@ export const asyncWritable = <S extends Stores, T>(
 
   // stringified representation of parents' loaded values
   // used to track whether a change has occurred and the store reloaded
-  let loadedValuesString: string;
+  let loadedValuesString: string | undefined;
 
   let latestLoadAndSet: () => Promise<T>;
 
@@ -75,8 +82,8 @@ export const asyncWritable = <S extends Stores, T>(
     try {
       return await mappingLoadFunction(values);
     } catch (e) {
-      if (e.name !== 'AbortError') {
-        logError(e);
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        logError(e as Error);
         setState('ERROR');
       }
       throw e;
@@ -89,7 +96,7 @@ export const asyncWritable = <S extends Stores, T>(
     forceReload?: boolean
   ) => Promise<T>;
 
-  const thisStore = writable(initial, () => {
+  const thisStore: Writable<T> = writable(initial, () => {
     loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
 
     const parentUnsubscribers = getStoresArray(stores).map((store) =>
@@ -131,11 +138,13 @@ export const asyncWritable = <S extends Stores, T>(
     }
 
     // convert storeValues to single store value if expected by mapping function
-    const loadInput = Array.isArray(stores) ? storeValues : storeValues[0];
+    const loadInput = Array.isArray(stores)
+      ? storeValues
+      : (storeValues as ValuesArray<S>)[0];
 
     const loadAndSet = async () => {
       latestLoadAndSet = loadAndSet;
-      if (get(loadState)?.isSettled) {
+      if (loadState !== undefined && get(loadState)?.isSettled) {
         setState('RELOADING');
       }
       try {
@@ -145,10 +154,10 @@ export const asyncWritable = <S extends Stores, T>(
         return finalValue;
       } catch (e) {
         // if a load is aborted, resolve to the current value of the store
-        if (e.name === 'AbortError') {
+        if (e instanceof DOMException && e.name === 'AbortError') {
           // Normally when a load is aborted we want to leave the state as is.
           // However if the latest load is aborted we change back to LOADED
-          // so that it does not get stuck LOADING/RELOADIN'.
+          // so that it does not get stuck LOADING/RELOADING'.
           if (loadAndSet === latestLoadAndSet) {
             setState('LOADED');
           }
@@ -194,7 +203,7 @@ export const asyncWritable = <S extends Stores, T>(
           currentLoadPromise = currentLoadPromise.then(() => writeResponse);
         }
       } catch (e) {
-        logError(e);
+        logError(e as Error);
         setState('ERROR');
         throw e;
       }
@@ -226,15 +235,15 @@ export const asyncWritable = <S extends Stores, T>(
       }
     : undefined;
 
-  const state: Readable<LoadState> = loadState
+  const state: Readable<LoadState> | undefined = loadState
     ? { subscribe: loadState.subscribe }
     : undefined;
+
   const reset = getStoreTestingMode()
     ? () => {
         thisStore.set(initial);
         setState('LOADING');
         loadedValuesString = undefined;
-        currentLoadPromise = undefined;
       }
     : undefined;
 
