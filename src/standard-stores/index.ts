@@ -9,14 +9,14 @@ import {
   type Writable,
   writable as vanillaWritable,
 } from 'svelte/store';
-import { anyReloadable, loadAll, reloadAll } from '../utils';
+import { anyReloadable, loadAll, reloadAll } from '../utils/index.js';
 import type {
   Loadable,
   Stores,
   StoresValues,
   VisitedMap,
-} from '../async-stores/types';
-import { flagStoreCreated } from '../config';
+} from '../async-stores/types.js';
+import { flagStoreCreated } from '../config.js';
 
 const loadDependencies = async <S extends Stores, T>(
   thisStore: Readable<T>,

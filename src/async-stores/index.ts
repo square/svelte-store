@@ -8,9 +8,9 @@ import type {
   StoresValues,
   WritableLoadable,
   VisitedMap,
-} from './types';
-import { anyReloadable, getStoresArray, reloadAll, loadAll } from '../utils';
-import { flagStoreCreated, getStoreTestingMode, logError } from '../config';
+} from './types.js';
+import { anyReloadable, getStoresArray, reloadAll, loadAll } from '../utils/index.js';
+import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
 
 // STORES
 

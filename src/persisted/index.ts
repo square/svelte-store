@@ -1,8 +1,8 @@
 import { get, type Updater, type Subscriber } from 'svelte/store';
-import { StorageType, type StorageOptions, type Persisted } from './types';
-import type { Loadable } from '../async-stores/types';
-import { isLoadable, reloadAll } from '../utils';
-import { writable } from '../standard-stores';
+import { StorageType, type StorageOptions, type Persisted } from './types.js';
+import type { Loadable } from '../async-stores/types.js';
+import { isLoadable, reloadAll } from '../utils/index.js';
+import { writable } from '../standard-stores/index.js';
 import {
   getCookie,
   getLocalStorageItem,
@@ -13,7 +13,7 @@ import {
   removeSessionStorageItem,
   removeCookie,
   removeLocalStorageItem,
-} from './storage-utils';
+} from './storage-utils.js';
 
 type GetStorageItem = (key: string, consentLevel?: unknown) => string | null;
 type SetStorageItem = (

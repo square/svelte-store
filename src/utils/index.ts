@@ -6,7 +6,7 @@ import {
   type Reloadable,
   type Stores,
   type StoresValues,
-} from '../async-stores/types';
+} from '../async-stores/types.js';
 
 export const getStoresArray = (stores: Stores): StoresArray => {
   return Array.isArray(stores) ? stores : [stores];
