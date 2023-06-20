@@ -31,7 +31,8 @@
     ],
     "roots": [
       "./test"
-    ]
+    ],
+    "resolver": "ts-jest-resolver"
   },
   "devDependencies": {
     "@types/jest": "^27.0.2",
@@ -45,7 +46,8 @@
   },
   "dependencies": {
     "cookie-storage": "^6.1.0",
-    "svelte": "^3.0.0"
+    "svelte": "^3.0.0",
+    "ts-jest-resolver": "^2.0.1"
   },
   "license": "ISC",
   "author": "Square",

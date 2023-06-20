@@ -18,11 +18,23 @@ export type {
   Stores,
   StoresValues,
 } from './async-stores/types.js';
-export type { StorageType, StorageOptions, Persisted } from './persisted/types.js';
+export type {
+  StorageType,
+  StorageOptions,
+  Persisted,
+} from './persisted/types.js';
 
 export { asyncClient } from './async-client/index.js';
-export { asyncWritable, asyncDerived, asyncReadable } from './async-stores/index.js';
-export { configurePersistedConsent, persisted } from './persisted/index.js';
+export {
+  asyncWritable,
+  asyncDerived,
+  asyncReadable,
+} from './async-stores/index.js';
+export {
+  configureCustomStorageType,
+  configurePersistedConsent,
+  persisted,
+} from './persisted/index.js';
 export { derived, readable, writable } from './standard-stores/index.js';
 export {
   isLoadable,

@@ -15,38 +15,52 @@ import {
   removeLocalStorageItem,
 } from './storage-utils.js';
 
-type GetStorageItem = (key: string, consentLevel?: unknown) => string | null;
-type SetStorageItem = (
-  key: string,
-  value: string,
-  consentLevel?: unknown
-) => void;
+type GetStorageItem = (key: string) => unknown;
+type SetStorageItem = (key: string, value: unknown) => void;
 type RemoveStorageItem = (key: string) => void;
 
-const getStorageFunctions = (
-  type: StorageType
-): {
+type StorageFunctions = {
   getStorageItem: GetStorageItem;
   setStorageItem: SetStorageItem;
   removeStorageItem: RemoveStorageItem;
-} => {
-  return {
-    LOCAL_STORAGE: {
-      getStorageItem: getLocalStorageItem,
-      setStorageItem: setLocalStorageItem,
-      removeStorageItem: removeLocalStorageItem,
-    },
-    SESSION_STORAGE: {
-      getStorageItem: getSessionStorageItem,
-      setStorageItem: setSessionStorageItem,
-      removeStorageItem: removeSessionStorageItem,
-    },
-    COOKIE: {
-      getStorageItem: getCookie,
-      setStorageItem: setCookie,
-      removeStorageItem: removeCookie,
-    },
+};
+
+const builtinStorageFunctions: Record<string, StorageFunctions> = {
+  LOCAL_STORAGE: {
+    getStorageItem: getLocalStorageItem,
+    setStorageItem: setLocalStorageItem,
+    removeStorageItem: removeLocalStorageItem,
+  },
+  SESSION_STORAGE: {
+    getStorageItem: getSessionStorageItem,
+    setStorageItem: setSessionStorageItem,
+    removeStorageItem: removeSessionStorageItem,
+  },
+  COOKIE: {
+    getStorageItem: getCookie,
+    setStorageItem: setCookie,
+    removeStorageItem: removeCookie,
+  },
+};
+
+const customStorageFunctions: Record<string, StorageFunctions> = {};
+
+export const configureCustomStorageType = (
+  type: string,
+  storageFunctions: StorageFunctions
+): void => {
+  customStorageFunctions[type] = storageFunctions;
+};
+
+const getStorageFunctions = (type: StorageType | string): StorageFunctions => {
+  const storageFunctions = {
+    ...builtinStorageFunctions,
+    ...customStorageFunctions,
   }[type];
+  if (!storageFunctions) {
+    throw new Error(`'${type}' is not a valid StorageType!`);
+  }
+  return storageFunctions;
 };
 
 type ConsentChecker = (consentLevel: unknown) => boolean;
@@ -92,20 +106,18 @@ export const persisted = <T>(
     // check consent if checker provided
     if (!checkConsent || checkConsent(consentLevel)) {
       const storageKey = await getKey();
-      setStorageItem(storageKey, JSON.stringify(value), consentLevel);
+      setStorageItem(storageKey, value);
     }
     set(value);
   };
 
   const synchronize = async (set: Subscriber<T>): Promise<T> => {
     const storageKey = await getKey();
-    const storageItem = getStorageItem(storageKey);
+    const stored = getStorageItem(storageKey);
 
-    if (storageItem) {
-      const stored = JSON.parse(storageItem);
-      set(stored);
-
-      return stored;
+    if (stored) {
+      set(stored as T);
+      return stored as T;
     } else if (initial !== undefined) {
       if (isLoadable(initial)) {
         const $initial = await initial.load();
