@@ -1,5 +1,10 @@
 # Changelog #
 
+## 1.0.16 (2023-6-20)
+
+- fix: moduleResoltion: NoodeNext support
+- feat: allow for custom storage types for persisted stores
+
 ## 1.0.15 (2023-2-27)
 
 - *BREAKING CHANGE* fix: loadAll/reloadAll resolve with up-to-date store values
