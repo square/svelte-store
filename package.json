@@ -42,12 +42,15 @@
     "eslint-plugin-square": "^20.0.2",
     "jest": "^27.2.4",
     "ts-jest": "^27.0.5",
-    "typescript": "^4.5.5"
+    "ts-jest-resolver": "^2.0.1",
+    "typescript": "^4.5.5",
+    "svelte": "^3.0.0"
   },
   "dependencies": {
-    "cookie-storage": "^6.1.0",
-    "svelte": "^3.0.0",
-    "ts-jest-resolver": "^2.0.1"
+    "cookie-storage": "^6.1.0"
+  },
+  "peerDependencies": {
+    "svelte": "^3.0.0"
   },
   "license": "ISC",
   "author": "Square",
