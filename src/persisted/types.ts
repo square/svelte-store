@@ -4,7 +4,7 @@ export type StorageType = 'LOCAL_STORAGE' | 'SESSION_STORAGE' | 'COOKIE';
 
 export type StorageOptions = {
   reloadable?: true;
-  storageType?: StorageType;
+  storageType?: StorageType | string;
   consentLevel?: unknown;
 };
 

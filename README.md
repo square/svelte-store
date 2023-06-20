@@ -225,13 +225,13 @@ const remoteSessionToken = asyncReadable(
     const session = await generateSession();
     return session.token;
   },
-  { reloadable: true, storageType: 'SESSION_STORAGE' },
+  { reloadable: true },
 );
 
 const sessionToken = persisted(
   remoteSessionToken,
   'SESSION_TOKEN',
-  { reloadable: true }
+  { reloadable: true, storageType: 'SESSION_STORAGE' }
 );
 ```
 
@@ -240,6 +240,24 @@ With this setup we can persist our remote data across a page session! The first 
 If an external source updates the storage item of the persisted store the two values will go out of sync. In such a case we can call `.resync()` on the store in order to update the store the *parsed* value of the storage item.
 
 We are also able to wipe stored data by calling `clear()` on the store. The storage item will be removed and the value of the store set to `null`.
+
+#### persisted configuration / custom storage
+
+Persisted stores have three built in storage types: LOCAL_STORAGE, SESSION_STORAGE, and COOKIE. These should be sufficient for most use cases, but have the disadvantage of only being able to store JSON serializable data. If more advanced behavior is required we can define a custom storage type to handle this, such as integrating [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API). All that is required is for us to provide the relevant setter/getter/deleter functions for interfacing with our storage.
+
+*One time setup is all that is needed for custom storage...*
+
+```javascript
+configureCustomStorageType('INDEXED_DB', {
+  getStorageItem: (key) => /* get from IndexedDB */,
+  setStorageItem: (key, value) => /* persist to IndexedDB */,
+  removeStorageItem: (key) => /* delete from IndexedDB */,
+});
+
+const customStore = persisted('defaultValue', 'indexedDbKey', {
+  storageType: 'INDEXED_DB',
+});
+```
 
 #### persisted configuration / consent
 

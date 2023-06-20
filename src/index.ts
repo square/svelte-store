@@ -30,7 +30,11 @@ export {
   asyncDerived,
   asyncReadable,
 } from './async-stores/index.js';
-export { configurePersistedConsent, persisted } from './persisted/index.js';
+export {
+  configureCustomStorageType,
+  configurePersistedConsent,
+  persisted,
+} from './persisted/index.js';
 export { derived, readable, writable } from './standard-stores/index.js';
 export {
   isLoadable,
