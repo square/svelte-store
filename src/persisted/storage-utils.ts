@@ -1,4 +1,4 @@
-import { CookieStorage } from "cookie-storage";
+import { CookieStorage } from 'cookie-storage';
 
 const cookieStorage = new CookieStorage();
 

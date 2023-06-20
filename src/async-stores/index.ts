@@ -9,7 +9,12 @@ import type {
   WritableLoadable,
   VisitedMap,
 } from './types.js';
-import { anyReloadable, getStoresArray, reloadAll, loadAll } from '../utils/index.js';
+import {
+  anyReloadable,
+  getStoresArray,
+  reloadAll,
+  loadAll,
+} from '../utils/index.js';
 import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
 
 // STORES
