@@ -1,5 +1,11 @@
 # Changelog #
 
+## 1.0.17 (2023-6-20)
+
+- *BREAKING CHANGE* chore: rearrange dependencies to minimize installed package size
+  - How to migrate:
+    - Whereas before square/svelte-store came with its own version of svelte, now it is a peer dependency. This means that this package will now use the existing version of svelte instead of its own, which may result in behavior discrepancies if using an old version of svelte. This can be mitigated by updating the version of svelte used.
+
 ## 1.0.16 (2023-6-20)
 
 - fix: moduleResoltion: NoodeNext support
