@@ -1,10 +1,4 @@
-import {
-  get,
-  type Updater,
-  type Readable,
-  writable,
-  StartStopNotifier,
-} from 'svelte/store';
+import { get, type Updater, type Readable, writable } from 'svelte/store';
 import type {
   AsyncStoreOptions,
   Loadable,
@@ -69,18 +63,20 @@ export const asyncWritable = <S extends Stores, T>(
   const loadState = trackState
     ? writable<LoadState>(getLoadState('LOADING'))
     : undefined;
+
   const setState = (state: State) => loadState?.set(getLoadState(state));
 
-  // flag marking whether store is ready for updates from subscriptions
-  let ready = false;
+  // stringified representation of parents' loaded values
+  // used to track whether a change has occurred and the store reloaded
+  let loadedValuesString: string;
+
+  let latestLoadAndSet: () => Promise<T>;
 
   // most recent call of mappingLoadFunction, including resulting side effects
   // (updating store value, tracking state, etc)
   let currentLoadPromise: Promise<T>;
 
-  let latestLoadAndSet: () => Promise<T>;
-
-  const tryLoadValue = async (values: StoresValues<S>) => {
+  const tryLoad = async (values: StoresValues<S>) => {
     try {
       return await mappingLoadFunction(values);
     } catch (e) {
@@ -92,15 +88,172 @@ export const asyncWritable = <S extends Stores, T>(
     }
   };
 
-  const loadThenSet = async (set) => {};
+  // eslint-disable-next-line prefer-const
+  let loadDependenciesThenSet: (
+    parentLoadFunction: (stores: S) => Promise<StoresValues<S>>,
+    forceReload?: boolean
+  ) => Promise<T>;
 
-  const onFirstSubscribtion: StartStopNotifier<T> = async (set) => {
-    (async () => {
-      const values = await loadAll(stores);
-      ready = true;
-      tryLoadValue(values);
-    })();
-    const values = await loadAll();
+  const thisStore = writable(initial, () => {
+    loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
+
+    const parentUnsubscribers = getStoresArray(stores).map((store) =>
+      store.subscribe(() => {
+        loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
+      })
+    );
+
+    return () => {
+      parentUnsubscribers.map((unsubscriber) => unsubscriber());
+    };
+  });
+
+  loadDependenciesThenSet = async (
+    parentLoadFunction: (stores: S) => Promise<StoresValues<S>>,
+    forceReload = false
+  ) => {
+    const loadParentStores = parentLoadFunction(stores);
+
+    try {
+      await loadParentStores;
+    } catch {
+      currentLoadPromise = loadParentStores as Promise<T>;
+      setState('ERROR');
+      return currentLoadPromise;
+    }
+
+    const storeValues = getStoresArray(stores).map((store) =>
+      get(store)
+    ) as StoresValues<S>;
+
+    if (!forceReload) {
+      const newValuesString = JSON.stringify(storeValues);
+      if (newValuesString === loadedValuesString) {
+        // no change, don't generate new promise
+        return currentLoadPromise;
+      }
+      loadedValuesString = newValuesString;
+    }
+
+    // convert storeValues to single store value if expected by mapping function
+    const loadInput = Array.isArray(stores) ? storeValues : storeValues[0];
+
+    const loadAndSet = async () => {
+      latestLoadAndSet = loadAndSet;
+      if (get(loadState)?.isSettled) {
+        setState('RELOADING');
+      }
+      try {
+        const finalValue = await tryLoad(loadInput);
+        thisStore.set(finalValue);
+        setState('LOADED');
+        return finalValue;
+      } catch (e) {
+        // if a load is aborted, resolve to the current value of the store
+        if (e.name === 'AbortError') {
+          // Normally when a load is aborted we want to leave the state as is.
+          // However if the latest load is aborted we change back to LOADED
+          // so that it does not get stuck LOADING/RELOADIN'.
+          if (loadAndSet === latestLoadAndSet) {
+            setState('LOADED');
+          }
+          return get(thisStore);
+        }
+        throw e;
+      }
+    };
+
+    currentLoadPromise = loadAndSet();
+    return currentLoadPromise;
+  };
+
+  const setStoreValueThenWrite = async (
+    updater: Updater<T>,
+    persist?: boolean
+  ) => {
+    setState('WRITING');
+    let oldValue: T;
+    try {
+      oldValue = await loadDependenciesThenSet(loadAll);
+    } catch {
+      oldValue = get(thisStore);
+    }
+    const newValue = updater(oldValue);
+    currentLoadPromise = currentLoadPromise
+      .then(() => newValue)
+      .catch(() => newValue);
+    thisStore.set(newValue);
+
+    if (mappingWriteFunction && persist) {
+      try {
+        const parentValues = await loadAll(stores);
+
+        const writeResponse = (await mappingWriteFunction(
+          newValue,
+          parentValues,
+          oldValue
+        )) as T;
+
+        if (writeResponse !== undefined) {
+          thisStore.set(writeResponse);
+          currentLoadPromise = currentLoadPromise.then(() => writeResponse);
+        }
+      } catch (e) {
+        logError(e);
+        setState('ERROR');
+        throw e;
+      }
+    }
+    setState('LOADED');
+  };
+
+  // required properties
+  const subscribe = thisStore.subscribe;
+  const set = (newValue: T, persist = true) =>
+    setStoreValueThenWrite(() => newValue, persist);
+  const update = (updater: Updater<T>, persist = true) =>
+    setStoreValueThenWrite(updater, persist);
+  const load = () => loadDependenciesThenSet(loadAll);
+
+  // // optional properties
+  const hasReloadFunction = Boolean(reloadable || anyReloadable(stores));
+  const reload = hasReloadFunction
+    ? async (visitedMap?: VisitedMap) => {
+        const visitMap = visitedMap ?? new WeakMap();
+        const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
+        setState('RELOADING');
+        const result = await loadDependenciesThenSet(
+          reloadAndTrackVisits,
+          reloadable
+        );
+        setState('LOADED');
+        return result;
+      }
+    : undefined;
+
+  const state: Readable<LoadState> = loadState
+    ? { subscribe: loadState.subscribe }
+    : undefined;
+  const reset = getStoreTestingMode()
+    ? () => {
+        thisStore.set(initial);
+        setState('LOADING');
+        loadedValuesString = undefined;
+        currentLoadPromise = undefined;
+      }
+    : undefined;
+
+  return {
+    get store() {
+      return this;
+    },
+    subscribe,
+    set,
+    update,
+    load,
+    ...(reload && { reload }),
+    ...(state && { state }),
+    ...(reset && { reset }),
   };
 };
 
