@@ -4,6 +4,7 @@ import {
   type Readable,
   writable,
   StartStopNotifier,
+  readable,
 } from 'svelte/store';
 import type {
   AsyncStoreOptions,
@@ -20,6 +21,7 @@ import {
   getStoresArray,
   reloadAll,
   loadAll,
+  rebounce,
 } from '../utils/index.js';
 import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
 
@@ -66,44 +68,128 @@ export const asyncWritable = <S extends Stores, T>(
   flagStoreCreated();
   const { reloadable, trackState, initial } = options;
 
-  const loadState = trackState
-    ? writable<LoadState>(getLoadState('LOADING'))
-    : undefined;
-  const setState = (state: State) => loadState?.set(getLoadState(state));
+  const rebouncedMappingLoad = rebounce(mappingLoadFunction);
+
+  const loadState = writable<LoadState>(getLoadState('LOADING'));
+  const setState = (state: State) => loadState.set(getLoadState(state));
 
   // flag marking whether store is ready for updates from subscriptions
   let ready = false;
+  let changeReceived = false;
 
   // most recent call of mappingLoadFunction, including resulting side effects
   // (updating store value, tracking state, etc)
   let currentLoadPromise: Promise<T>;
+  let resolveCurrentLoad: (value: T | PromiseLike<T>) => void;
+  let rejectCurrentLoad: (reason: Error) => void;
 
-  let latestLoadAndSet: () => Promise<T>;
+  const setCurrentLoadPromise = () => {
+    currentLoadPromise = new Promise((resolve, reject) => {
+      resolveCurrentLoad = resolve;
+      rejectCurrentLoad = reject;
+    });
+  };
 
-  const tryLoadValue = async (values: StoresValues<S>) => {
+  let parentValues: StoresValues<S>;
+
+  const mappingLoadThenSet = async (setStoreValue) => {
+    if (get(loadState).isSettled) {
+      setCurrentLoadPromise();
+      setState('RELOADING');
+    }
+
     try {
-      return await mappingLoadFunction(values);
+      const finalValue = await rebouncedMappingLoad(parentValues);
+      setStoreValue(finalValue);
+      resolveCurrentLoad(finalValue);
+      setState('LOADED');
     } catch (e) {
       if (e.name !== 'AbortError') {
-        logError(e);
         setState('ERROR');
+        rejectCurrentLoad(e);
       }
-      throw e;
     }
   };
 
-  const loadThenSet = async (set) => {};
+  const onFirstSubscription: StartStopNotifier<T> = (setStoreValue) => {
+    setCurrentLoadPromise();
 
-  const onFirstSubscribtion: StartStopNotifier<T> = async (set) => {
-    (async () => {
-      const values = await loadAll(stores);
-      ready = true;
-      tryLoadValue(values);
-    })();
-    const values = await loadAll();
+    const initialLoad = async () => {
+      try {
+        parentValues = await loadAll(stores);
+        ready = true;
+        changeReceived = false;
+        mappingLoadThenSet(setStoreValue);
+      } catch (error) {
+        rejectCurrentLoad(error);
+      }
+    };
+    initialLoad();
+
+    const parentUnsubscribers = getStoresArray(stores).map((store, i) =>
+      store.subscribe((value) => {
+        changeReceived = true;
+        if (Array.isArray(stores)) {
+          parentValues[i] = value;
+        } else {
+          parentValues = value as any;
+        }
+        if (ready) {
+          mappingLoadThenSet(setStoreValue);
+        }
+      })
+    );
+
+    // called on losing last subscriber
+    return () => {
+      parentUnsubscribers.map((unsubscriber) => unsubscriber());
+    };
+  };
+
+  const thisStore = writable(initial, onFirstSubscription);
+
+  const subscribe = thisStore.subscribe;
+  const load = async () => {
+    const dummyUnsubscribe = thisStore.subscribe(() => {
+      /* no-op */
+    });
+    try {
+      const result = await currentLoadPromise;
+      dummyUnsubscribe();
+      return result;
+    } catch (error) {
+      dummyUnsubscribe();
+      throw error;
+    }
+  };
+  const reload = async (visitedMap?: VisitedMap) => {
+    ready = false;
+    changeReceived = false;
+    setCurrentLoadPromise();
+    setState('RELOADING');
+
+    const visitMap = visitedMap ?? new WeakMap();
+    await reloadAll(stores, visitMap);
+    ready = true;
+    if (changeReceived || reloadable) {
+      mappingLoadThenSet(thisStore.set);
+    } else {
+      resolveCurrentLoad(get(thisStore));
+    }
+    return currentLoadPromise;
+  };
+
+  return {
+    get store() {
+      return this;
+    },
+    subscribe,
+    load,
+    reload,
+    set: () => Promise.resolve(),
+    update: () => Promise.resolve(),
   };
 };
-
 /**
  * Generate a Loadable store that is considered 'loaded' after resolving asynchronous behavior.
  * This asynchronous behavior may be derived from the value of parent Loadable or non Loadable stores.
