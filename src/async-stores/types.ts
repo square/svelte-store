@@ -37,6 +37,7 @@ export type WritableLoadable<T> = Loadable<T> & AsyncWritable<T>;
 export interface AsyncStoreOptions<T> {
   reloadable?: true;
   trackState?: true;
+  debug?: true;
   initial?: T;
 }
 export declare type StoresArray =

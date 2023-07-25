@@ -22,6 +22,7 @@ import {
   reloadAll,
   loadAll,
   rebounce,
+  getAll,
 } from '../utils/index.js';
 import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
 
@@ -66,7 +67,9 @@ export const asyncWritable = <S extends Stores, T>(
   options: AsyncStoreOptions<T> = {}
 ): WritableLoadable<T> => {
   flagStoreCreated();
-  const { reloadable, trackState, initial } = options;
+  const { reloadable, initial, debug } = options;
+
+  const debuggy = debug ? console.log : undefined;
 
   const rebouncedMappingLoad = rebounce(mappingLoadFunction);
 
@@ -95,16 +98,22 @@ export const asyncWritable = <S extends Stores, T>(
   const mappingLoadThenSet = async (setStoreValue) => {
     if (get(loadState).isSettled) {
       setCurrentLoadPromise();
+      debuggy?.('setting RELOADING');
       setState('RELOADING');
     }
 
     try {
       const finalValue = await rebouncedMappingLoad(parentValues);
+      debuggy?.('setting value');
       setStoreValue(finalValue);
+      if (!get(loadState).isWriting) {
+        debuggy?.('setting LOADED');
+        setState('LOADED');
+      }
       resolveCurrentLoad(finalValue);
-      setState('LOADED');
     } catch (e) {
       if (e.name !== 'AbortError') {
+        logError(e);
         setState('ERROR');
         rejectCurrentLoad(e);
       }
@@ -113,14 +122,18 @@ export const asyncWritable = <S extends Stores, T>(
 
   const onFirstSubscription: StartStopNotifier<T> = (setStoreValue) => {
     setCurrentLoadPromise();
+    parentValues = getAll(stores);
 
     const initialLoad = async () => {
+      debuggy?.('initial load called');
       try {
         parentValues = await loadAll(stores);
+        debuggy?.('setting ready');
         ready = true;
         changeReceived = false;
         mappingLoadThenSet(setStoreValue);
       } catch (error) {
+        console.log('wtf is happening', error);
         rejectCurrentLoad(error);
       }
     };
@@ -128,13 +141,15 @@ export const asyncWritable = <S extends Stores, T>(
 
     const parentUnsubscribers = getStoresArray(stores).map((store, i) =>
       store.subscribe((value) => {
+        debuggy?.('received value', value);
         changeReceived = true;
         if (Array.isArray(stores)) {
           parentValues[i] = value;
         } else {
-          parentValues = value as any;
+          parentValues = value as StoresValues<S>;
         }
         if (ready) {
+          debuggy?.('proceeding because ready');
           mappingLoadThenSet(setStoreValue);
         }
       })
@@ -143,41 +158,93 @@ export const asyncWritable = <S extends Stores, T>(
     // called on losing last subscriber
     return () => {
       parentUnsubscribers.map((unsubscriber) => unsubscriber());
+      ready = false;
     };
   };
 
   const thisStore = writable(initial, onFirstSubscription);
 
+  const setStoreValueThenWrite = async (
+    updater: Updater<T>,
+    persist?: boolean
+  ) => {
+    setState('WRITING');
+    let oldValue: T;
+    try {
+      oldValue = await currentLoadPromise;
+    } catch {
+      oldValue = get(thisStore);
+    }
+
+    setCurrentLoadPromise();
+    let newValue = updater(oldValue);
+    thisStore.set(newValue);
+
+    if (mappingWriteFunction && persist) {
+      try {
+        const writeResponse = (await mappingWriteFunction(
+          newValue,
+          parentValues,
+          oldValue
+        )) as T;
+
+        if (writeResponse !== undefined) {
+          thisStore.set(writeResponse);
+          newValue = writeResponse;
+        }
+      } catch (error) {
+        logError(error);
+        debuggy?.('setting ERROR');
+        setState('ERROR');
+        rejectCurrentLoad(error);
+        throw error;
+      }
+    }
+    setState('LOADED');
+    resolveCurrentLoad(newValue);
+  };
+
+  // required properties
   const subscribe = thisStore.subscribe;
-  const load = async () => {
+  const load = () => {
     const dummyUnsubscribe = thisStore.subscribe(() => {
       /* no-op */
     });
-    try {
-      const result = await currentLoadPromise;
-      dummyUnsubscribe();
-      return result;
-    } catch (error) {
-      dummyUnsubscribe();
-      throw error;
-    }
+    currentLoadPromise
+      .catch(() => {
+        /* no-op */
+      })
+      .finally(dummyUnsubscribe);
+    return currentLoadPromise;
   };
   const reload = async (visitedMap?: VisitedMap) => {
     ready = false;
     changeReceived = false;
     setCurrentLoadPromise();
+    debuggy?.('setting RELOADING from reload');
     setState('RELOADING');
 
     const visitMap = visitedMap ?? new WeakMap();
-    await reloadAll(stores, visitMap);
-    ready = true;
-    if (changeReceived || reloadable) {
-      mappingLoadThenSet(thisStore.set);
-    } else {
-      resolveCurrentLoad(get(thisStore));
+    try {
+      await reloadAll(stores, visitMap);
+      ready = true;
+      if (changeReceived || reloadable) {
+        mappingLoadThenSet(thisStore.set);
+      } else {
+        resolveCurrentLoad(get(thisStore));
+        setState('LOADED');
+      }
+    } catch (error) {
+      debuggy?.('caught error during reload');
+      setState('ERROR');
+      rejectCurrentLoad(error);
     }
     return currentLoadPromise;
   };
+  const set = (newValue: T, persist = true) =>
+    setStoreValueThenWrite(() => newValue, persist);
+  const update = (updater: Updater<T>, persist = true) =>
+    setStoreValueThenWrite(updater, persist);
 
   return {
     get store() {
@@ -186,10 +253,12 @@ export const asyncWritable = <S extends Stores, T>(
     subscribe,
     load,
     reload,
-    set: () => Promise.resolve(),
-    update: () => Promise.resolve(),
+    set,
+    update,
+    state: { subscribe: loadState.subscribe },
   };
 };
+
 /**
  * Generate a Loadable store that is considered 'loaded' after resolving asynchronous behavior.
  * This asynchronous behavior may be derived from the value of parent Loadable or non Loadable stores.
