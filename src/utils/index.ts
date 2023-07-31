@@ -71,7 +71,10 @@ export const reloadAll = async <S extends Stores>(
     if (Object.prototype.hasOwnProperty.call(store, 'reload')) {
       // only reload if store has not already been visited
       if (!visitMap.has(store)) {
-        visitMap.set(store, (store as Loadable<unknown>).reload(visitMap));
+        visitMap.set(
+          store,
+          (store as unknown as Reloadable<unknown>).reload(visitMap)
+        );
       }
       return visitMap.get(store);
     } else if (Object.prototype.hasOwnProperty.call(store, 'load')) {
@@ -117,7 +120,7 @@ export const rebounce = <T, U>(
   callback: (...args: T[]) => U,
   delay = 0
 ): ((...args: T[]) => FlatPromise<U>) & {
-  clear: () => void;
+  abort: () => void;
 } => {
   let previousReject: (reason: Error) => void;
   let existingTimer: ReturnType<typeof setTimeout>;
@@ -151,7 +154,7 @@ export const rebounce = <T, U>(
     return currentPromise;
   };
 
-  const clear = () => {
+  const abort = () => {
     clearTimeout(existingTimer);
     previousReject?.(
       new DOMException('The function was rebounced.', 'AbortError')
@@ -160,7 +163,7 @@ export const rebounce = <T, U>(
     previousReject = undefined;
   };
 
-  rebounced.clear = clear;
+  rebounced.abort = abort;
 
   return rebounced;
 };

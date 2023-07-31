@@ -1,4 +1,4 @@
-import { WritableLoadable } from '../async-stores/types.js';
+import { AsyncWritable, Loadable, Reloadable } from '../async-stores/types.js';
 
 export type StorageType = 'LOCAL_STORAGE' | 'SESSION_STORAGE' | 'COOKIE';
 
@@ -14,4 +14,7 @@ interface Syncable<T> {
   store: Syncable<T>;
 }
 
-export type Persisted<T> = Syncable<T> & WritableLoadable<T>;
+export type Persisted<T> = Syncable<T> &
+  Loadable<T> &
+  Reloadable<T> &
+  AsyncWritable<T>;

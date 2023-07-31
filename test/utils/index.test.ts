@@ -20,7 +20,7 @@ describe('loadAll / reloadAll utils', () => {
   const badLoadable = {
     load: () => Promise.reject(new Error('E')),
     reload: () => Promise.reject(new Error('F')),
-  } as Loadable<string>;
+  } as unknown as Loadable<string>;
 
   beforeEach(() => {
     mockReload
@@ -167,6 +167,6 @@ describe('rebounce', () => {
     const rebouncedToUpperCase = rebounce(toUpperCase, 100);
 
     expect(rebouncedToUpperCase('a string')).rejects.toStrictEqual(abortError);
-    rebouncedToUpperCase.clear();
+    rebouncedToUpperCase.abort();
   });
 });

@@ -12,6 +12,7 @@ import {
 import { anyReloadable, loadAll, reloadAll } from '../utils/index.js';
 import type {
   Loadable,
+  Reloadable,
   Stores,
   StoresValues,
   VisitedMap,
@@ -58,7 +59,7 @@ export function derived<S extends Stores, T>(
   stores: S,
   fn: SubscribeMapper<S, T>,
   initialValue?: T
-): Loadable<T>;
+): Loadable<T> & Reloadable<T>;
 
 /**
  * A Derived store that is considered 'loaded' when all of its parents have loaded (and so on).
@@ -73,25 +74,23 @@ export function derived<S extends Stores, T>(
   stores: S,
   mappingFunction: DerivedMapper<S, T>,
   initialValue?: T
-): Loadable<T>;
+): Loadable<T> & Reloadable<T>;
 
 // eslint-disable-next-line func-style
 export function derived<S extends Stores, T>(
   stores: S,
   fn: DerivedMapper<S, T> | SubscribeMapper<S, T>,
   initialValue?: T
-): Loadable<T> {
+): Loadable<T> & Reloadable<T> {
   flagStoreCreated();
 
   const thisStore = vanillaDerived(stores, fn as any, initialValue);
   const load = () => loadDependencies(thisStore, loadAll, stores);
-  const reload = anyReloadable(stores)
-    ? (visitedMap?: VisitedMap) => {
-        const visitMap = visitedMap ?? new WeakMap();
-        const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
-        return loadDependencies(thisStore, reloadAndTrackVisits, stores);
-      }
-    : undefined;
+  const reload = (visitedMap?: VisitedMap) => {
+    const visitMap = visitedMap ?? new WeakMap();
+    const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
+    return loadDependencies(thisStore, reloadAndTrackVisits, stores);
+  };
 
   return {
     get store() {
@@ -99,7 +98,7 @@ export function derived<S extends Stores, T>(
     },
     ...thisStore,
     load,
-    ...(reload && { reload }),
+    reload,
   };
 }
 

@@ -44,21 +44,21 @@ describe('asyncWritable', () => {
       expect(get(myAsyncReadable)).toBe('expected');
     });
 
-    // it('loads initial value when rejected', async () => {
-    //   const myAsyncReadable = asyncReadable('initial', () =>
-    //     Promise.reject(new Error('error'))
-    //   );
-    //   const isInitial = derived(
-    //     myAsyncReadable,
-    //     ($myAsyncReadable) => $myAsyncReadable === 'initial'
-    //   );
-    //   expect(get(isInitial)).toBe(true);
+    it('loads initial value when rejected', async () => {
+      const myAsyncReadable = asyncReadable('initial', () =>
+        Promise.reject(new Error('error'))
+      );
+      const isInitial = derived(
+        myAsyncReadable,
+        ($myAsyncReadable) => $myAsyncReadable === 'initial'
+      );
+      expect(get(isInitial)).toBe(true);
 
-    //   expect(myAsyncReadable.load()).rejects.toStrictEqual(new Error('error'));
-    //   await myAsyncReadable.load().catch(() => Promise.resolve());
-    //   expect(get(myAsyncReadable)).toBe('initial');
-    //   expect(get(isInitial)).toBe(true);
-    // });
+      expect(myAsyncReadable.load()).rejects.toStrictEqual(new Error('error'));
+      await myAsyncReadable.load().catch(() => Promise.resolve());
+      expect(get(myAsyncReadable)).toBe('initial');
+      expect(get(isInitial)).toBe(true);
+    });
 
     it('does not reload if not reloadable', async () => {
       const myAsyncDerived = asyncReadable(undefined, mockReload);
@@ -100,17 +100,14 @@ describe('asyncWritable', () => {
       const myAsyncDerived = asyncDerived(
         writableParent,
         () => Promise.reject(new Error('error')),
-        { initial: 'initial', debug: true }
+        { initial: 'initial' }
       );
-      try {
-        myAsyncDerived.subscribe(vi.fn);
-      } catch (error) {
-        console.log(error);
-      }
+
+      myAsyncDerived.subscribe(vi.fn);
 
       expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
       await myAsyncDerived.load().catch(() => Promise.resolve());
-      // expect(get(myAsyncDerived)).toBe('initial');
+      expect(get(myAsyncDerived)).toBe('initial');
     });
 
     it('does not reload if not reloadable', async () => {
@@ -195,6 +192,24 @@ describe('asyncWritable', () => {
     });
 
     it('rejects load when parent load fails', () => {
+      const asyncReadableParent = asyncReadable(
+        undefined,
+        () => Promise.reject(new Error('error')),
+        { reloadable: true }
+      );
+      expect(asyncReadableParent.load()).rejects.toStrictEqual(
+        new Error('error')
+      );
+
+      const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
+        Promise.resolve(`derived from ${storeValue}`)
+      );
+
+      expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
+      expect(myAsyncDerived.reload()).rejects.toStrictEqual(new Error('error'));
+    });
+
+    it('rejects reload when parent load fails', () => {
       const asyncReadableParent = asyncReadable(undefined, () =>
         Promise.reject(new Error('error'))
       );
@@ -253,74 +268,78 @@ describe('asyncWritable', () => {
       expect(secondDerivedLoad).toHaveBeenCalledTimes(2);
     });
 
-    // describe('abort/rebounce integration', () => {
-    //   it('loads to rebounced value only', async () => {
-    //     const load = (value: string) => {
-    //       return new Promise<string>((resolve) =>
-    //         setTimeout(() => resolve(value), 100)
-    //       );
-    //     };
+    describe('abort/rebounce integration', () => {
+      it('loads to rebounced value only', async () => {
+        const load = (value: string) => {
+          return new Promise<string>((resolve) =>
+            setTimeout(() => resolve(value), 100)
+          );
+        };
 
-    //     const rebouncedLoad = rebounce(load);
-    //     const myParent = writable();
-    //     const { store: myStore, state: myState } = asyncDerived(
-    //       myParent,
-    //       rebouncedLoad,
-    //       {
-    //         trackState: true,
-    //       }
-    //     );
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          load,
+          {
+            trackState: true,
+          }
+        );
 
-    //     let setIncorrectly = false;
-    //     myStore.subscribe((value) => {
-    //       if (['a', 'b'].includes(value)) {
-    //         setIncorrectly = true;
-    //       }
-    //     });
+        let setIncorrectly = false;
+        myStore.subscribe((value) => {
+          if (['a', 'b'].includes(value)) {
+            setIncorrectly = true;
+          }
+        });
 
-    //     let everErrored = false;
-    //     myState.subscribe((state) => {
-    //       if (state.isError) {
-    //         everErrored = true;
-    //       }
-    //     });
+        let everErrored = false;
+        myState.subscribe((state) => {
+          if (state.isError) {
+            everErrored = true;
+          }
+        });
 
-    //     myParent.set('a');
-    //     await new Promise((resolve) => setTimeout(resolve, 50));
-    //     expect(get(myState).isLoading).toBe(true);
-    //     myParent.set('b');
-    //     await new Promise((resolve) => setTimeout(resolve, 50));
-    //     expect(get(myState).isLoading).toBe(true);
-    //     myParent.set('c');
-    //     await new Promise((resolve) => setTimeout(resolve, 50));
-    //     expect(get(myState).isLoading).toBe(true);
+        myParent.set('a');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState).isLoading).toBe(true);
+        myParent.set('b');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState).isLoading).toBe(true);
+        myParent.set('c');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState).isLoading).toBe(true);
 
-    //     const finalValue = await myStore.load();
+        const finalValue = await myStore.load();
+        expect(everErrored).toBe(false);
+        expect(setIncorrectly).toBe(false);
+        expect(finalValue).toBe('c');
+        expect(get(myStore)).toBe('c');
+        expect(get(myState).isLoaded).toBe(true);
+      });
 
-    //     expect(everErrored).toBe(false);
-    //     expect(setIncorrectly).toBe(false);
-    //     expect(finalValue).toBe('c');
-    //     expect(get(myStore)).toBe('c');
-    //     expect(get(myState).isLoaded).toBe(true);
-    //   });
+      it('uses rebounce delay', async () => {
+        const load = (value: string) => {
+          return Promise.resolve(value);
+        };
 
-    //   it('can be cleared correctly', async () => {
-    //     const load = (value: string) => {
-    //       return new Promise<string>((resolve) =>
-    //         setTimeout(() => resolve(value), 100)
-    //       );
-    //     };
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          load,
+          {
+            trackState: true,
+            rebounceDelay: 100,
+          }
+        );
 
-    //     const rebouncedLoad = rebounce(load);
-    //     const myParent = writable();
-    //     const { store: myStore, state: myState } = asyncDerived(
-    //       myParent,
-    //       rebouncedLoad,
-    //       {
-    //         trackState: true,
-    //       }
-    //     );
+        let setIncorrectly = false;
+        myStore.subscribe((value) => {
+          if (['a', 'b'].includes(value)) {
+            setIncorrectly = true;
+          }
+        });
 
+<<<<<<< HEAD
 <<<<<<< HEAD
         myStore.subscribe(vi.fn());
 ||||||| parent of 7cc4482 (mostly working except for rejections)
@@ -328,35 +347,97 @@ describe('asyncWritable', () => {
 =======
     //     myStore.subscribe(jest.fn());
 >>>>>>> 7cc4482 (mostly working except for rejections)
+||||||| parent of b2be866 (broke something)
+    //     myStore.subscribe(jest.fn());
+=======
+        let everErrored = false;
+        myState.subscribe((state) => {
+          if (state.isError) {
+            everErrored = true;
+          }
+        });
+>>>>>>> b2be866 (broke something)
 
-    //     myParent.set('one');
-    //     let loadValue = await myStore.load();
-    //     expect(loadValue).toBe('one');
+        myParent.set('a');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState).isLoading).toBe(true);
+        myParent.set('b');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState).isLoading).toBe(true);
+        myParent.set('c');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(get(myState).isLoading).toBe(true);
 
-    //     myParent.set('two');
-    //     await new Promise((resolve) => setTimeout(resolve, 50));
-    //     rebouncedLoad.clear();
-    //     loadValue = await myStore.load();
+        const finalValue = await myStore.load();
+        expect(everErrored).toBe(false);
+        expect(setIncorrectly).toBe(false);
+        expect(finalValue).toBe('c');
+        expect(get(myStore)).toBe('c');
+        expect(get(myState).isLoaded).toBe(true);
+      });
 
-    //     expect(loadValue).toBe('one');
-    //     expect(get(myStore)).toBe('one');
-    //     expect(get(myState).isLoaded).toBe(true);
-    //   });
+      it('loads last called value instead of last resolved', async () => {
+        let timesCalled = 0;
+        const load = (value: string) => {
+          timesCalled += 1;
+          return new Promise<string>((resolve) =>
+            setTimeout(() => resolve(value), 200 - timesCalled * 100)
+          );
+        };
 
-    //   it('rejects load when rebounce reject', () => {
-    //     const rebouncedReject = rebounce(
-    //       () => Promise.reject(new Error('error')),
-    //       100
-    //     );
-    //     const parent = writable();
-    //     const rejectStore = asyncDerived(parent, () => rebouncedReject());
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          load,
+          {
+            trackState: true,
+          }
+        );
 
-    //     parent.set('value');
-    //     expect(() => rejectStore.load()).rejects.toStrictEqual(
-    //       new Error('error')
-    //     );
-    //   });
-    // });
+        let setIncorrectly = false;
+        myStore.subscribe((value) => {
+          if (['a'].includes(value)) {
+            setIncorrectly = true;
+          }
+        });
+
+        myParent.set('a');
+        myParent.set('b');
+
+        const result = await myStore.load();
+        expect(result).toBe('b');
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        expect(get(myStore)).toBe('b');
+        expect(setIncorrectly).toBe(false);
+        expect(get(myState).isLoaded).toBe(true);
+      });
+
+      it('can be aborted correctly', async () => {
+        const load = (value: string) => {
+          return new Promise<string>((resolve) =>
+            setTimeout(() => resolve(value), 100)
+          );
+        };
+
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(myParent, load);
+
+        myStore.subscribe(jest.fn());
+        myParent.set('one');
+        let loadValue = await myStore.load();
+        expect(loadValue).toBe('one');
+
+        myParent.set('two');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        myStore.abort();
+
+        loadValue = await myStore.load();
+        expect(loadValue).toBe('one');
+        expect(get(myStore)).toBe('one');
+        expect(get(myState).isLoaded).toBe(true);
+      });
+    });
   });
 
   describe('multiple parents asyncDerived', () => {
@@ -432,6 +513,8 @@ describe('asyncWritable', () => {
       await myDerived.load();
       expect(get(myDerived)).toBe('L: first value');
     });
+
+    // it('calls selfLoad once when multiple ')
   });
 
   describe('no parents asyncWritable', () => {
@@ -614,6 +697,7 @@ describe('asyncWritable', () => {
     });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     it('still sets value when rejected', async () => {
       const mappingWriteFunction = vi.fn(() =>
         Promise.reject(new Error('any'))
@@ -650,16 +734,41 @@ describe('asyncWritable', () => {
     //   );
     //   myAsyncWritable.subscribe(jest.fn);
 >>>>>>> 7cc4482 (mostly working except for rejections)
+||||||| parent of b2be866 (broke something)
+    // it('still sets value when rejected', async () => {
+    //   const mappingWriteFunction = jest.fn(() =>
+    //     Promise.reject(new Error('any'))
+    //   );
+    //   const myAsyncWritable = asyncWritable(
+    //     writableParent,
+    //     () => Promise.reject(new Error('error')),
+    //     mappingWriteFunction,
+    //     { initial: 'initial' }
+    //   );
+    //   myAsyncWritable.subscribe(jest.fn);
+=======
+    it('still sets value when rejected', async () => {
+      const mappingWriteFunction = jest.fn(() =>
+        Promise.reject(new Error('any'))
+      );
+      const myAsyncWritable = asyncWritable(
+        writableParent,
+        () => Promise.reject(new Error('error')),
+        mappingWriteFunction,
+        { initial: 'initial' }
+      );
+      myAsyncWritable.subscribe(jest.fn);
+>>>>>>> b2be866 (broke something)
 
-    //   expect(myAsyncWritable.load()).rejects.toStrictEqual(new Error('error'));
-    //   await myAsyncWritable.load().catch(() => Promise.resolve());
-    //   expect(get(myAsyncWritable)).toBe('initial');
+      expect(myAsyncWritable.load()).rejects.toStrictEqual(new Error('error'));
+      await myAsyncWritable.load().catch(() => Promise.resolve());
+      expect(get(myAsyncWritable)).toBe('initial');
 
-    //   await myAsyncWritable.set('final').catch(() => Promise.resolve());
-    //   expect(get(myAsyncWritable)).toBe('final');
+      await myAsyncWritable.set('final').catch(() => Promise.resolve());
+      expect(get(myAsyncWritable)).toBe('final');
 
-    //   expect(mappingWriteFunction).toHaveBeenCalledTimes(1);
-    // });
+      expect(mappingWriteFunction).toHaveBeenCalledTimes(1);
+    });
 
     it('does not reload if not reloadable', async () => {
       const myAsyncWritable = asyncWritable(writableParent, mockReload, () =>
@@ -785,7 +894,7 @@ describe('asyncWritable', () => {
       expect(get(myAsyncWritable)).toBe('set value');
     });
 
-    it('rejects load when parent load fails', () => {
+    it('rejects load when parent load fails', async () => {
       const asyncReadableParent = asyncReadable(undefined, () =>
         Promise.reject(new Error('error'))
       );
@@ -797,14 +906,16 @@ describe('asyncWritable', () => {
       myAsyncWritable.subscribe(vi.fn());
 
       expect(myAsyncWritable.load()).rejects.toStrictEqual(new Error('error'));
+      await safeLoad(myAsyncWritable);
     });
   });
 
-  // describe('error logging', () => {
-  //   afterEach(() => {
-  //     logAsyncErrors(undefined);
-  //   });
+  describe('error logging', () => {
+    afterEach(() => {
+      logAsyncErrors(undefined);
+    });
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     it('does not call error logger when no error', async () => {
       const errorLogger = vi.fn();
@@ -818,15 +929,25 @@ describe('asyncWritable', () => {
   //     const errorLogger = jest.fn();
   //     logAsyncErrors(errorLogger);
 >>>>>>> 7cc4482 (mostly working except for rejections)
+||||||| parent of b2be866 (broke something)
+  //   it('does not call error logger when no error', async () => {
+  //     const errorLogger = jest.fn();
+  //     logAsyncErrors(errorLogger);
+=======
+    it('does not call error logger when no error', async () => {
+      const errorLogger = jest.fn();
+      logAsyncErrors(errorLogger);
+>>>>>>> b2be866 (broke something)
 
-  //     const myReadable = asyncReadable(undefined, () =>
-  //       Promise.resolve('value')
-  //     );
-  //     await myReadable.load();
+      const myReadable = asyncReadable(undefined, () =>
+        Promise.resolve('value')
+      );
+      await myReadable.load();
 
-  //     expect(errorLogger).not.toHaveBeenCalled();
-  //   });
+      expect(errorLogger).not.toHaveBeenCalled();
+    });
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     it('does call error logger when async error', async () => {
       const errorLogger = vi.fn();
@@ -840,20 +961,31 @@ describe('asyncWritable', () => {
   //     const errorLogger = jest.fn();
   //     logAsyncErrors(errorLogger);
 >>>>>>> 7cc4482 (mostly working except for rejections)
+||||||| parent of b2be866 (broke something)
+  //   it('does call error logger when async error', async () => {
+  //     const errorLogger = jest.fn();
+  //     logAsyncErrors(errorLogger);
+=======
+    it('does call error logger when async error', async () => {
+      const errorLogger = jest.fn();
+      logAsyncErrors(errorLogger);
+>>>>>>> b2be866 (broke something)
 
-  //     const myReadable = asyncReadable(undefined, () =>
-  //       Promise.reject(new Error('error'))
-  //     );
+      const myReadable = asyncReadable(undefined, () =>
+        Promise.reject(new Error('error'))
+      );
 
-  //     // perform multiple loads and make sure logger only called once
-  //     await safeLoad(myReadable);
-  //     await safeLoad(myReadable);
-  //     await safeLoad(myReadable);
+      myReadable.subscribe(jest.fn());
 
-  //     expect(errorLogger).toHaveBeenCalledWith(new Error('error'));
-  //     expect(errorLogger).toHaveBeenCalledTimes(1);
-  //   });
-  // });
+      // perform multiple loads and make sure logger only called once
+      await safeLoad(myReadable);
+      await safeLoad(myReadable);
+      await safeLoad(myReadable);
+
+      expect(errorLogger).toHaveBeenCalledWith(new Error('error'));
+      expect(errorLogger).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('trackState', () => {
@@ -961,9 +1093,9 @@ describe('trackState', () => {
       expect(get(myStore)).toBe('initial');
       expect(get(myState).isLoading).toBe(true);
 
-      await myStore.load();
+      const result = await myStore.load();
 
-      expect(get(myStore)).toBe('loaded value');
+      expect(result).toBe('loaded value');
       expect(get(myState).isLoaded).toBe(true);
     });
 
@@ -977,9 +1109,9 @@ describe('trackState', () => {
       expect(get(myStore)).toBe('initial');
       expect(get(myState).isLoading).toBe(true);
 
-      await myStore.load();
+      const result = await myStore.load();
 
-      expect(get(myStore)).toBe('loaded value');
+      expect(result).toBe('loaded value');
       expect(get(myState).isLoaded).toBe(true);
     });
 
@@ -993,9 +1125,9 @@ describe('trackState', () => {
       expect(get(myStore)).toBe('initial');
       expect(get(myState).isLoading).toBe(true);
 
-      await myStore.load();
+      const result = await myStore.load();
 
-      expect(get(myStore)).toBe('loaded value');
+      expect(result).toBe('loaded value');
       expect(get(myState).isLoaded).toBe(true);
     });
   });
@@ -1142,6 +1274,8 @@ describe('trackState', () => {
         { trackState: true }
       );
 
+      myStore.subscribe(jest.fn());
+
       expect(get(myState).isLoading).toBe(true);
 
       await myStore.load();
@@ -1184,7 +1318,7 @@ describe('trackState', () => {
       const { store: myStore, state: myState } = asyncReadable(
         'initial',
         load,
-        { trackState: true, reloadable: true }
+        { trackState: true, reloadable: true, debug: 'thing' }
       );
 
       myStore.subscribe(jest.fn());
@@ -1207,6 +1341,7 @@ describe('trackState', () => {
         .mockRejectedValueOnce('failure');
       const myParent = asyncReadable('initial', parentLoad, {
         reloadable: true,
+        debug: 'parent:',
       });
       const { store: myStore, state: myState } = asyncDerived(
         myParent,
@@ -1252,24 +1387,25 @@ describe('trackState', () => {
       expect(get(myState).isLoaded).toBe(true);
     });
 
-    // it('tracks writing error', async () => {
-    //   const { store: myStore, state: myState } = asyncWritable(
-    //     [],
-    //     () => Promise.resolve('loaded value'),
-    //     () => Promise.reject(new Error('rejection')),
-    //     { trackState: true }
-    //   );
+    it('tracks writing error', async () => {
+      const { store: myStore, state: myState } = asyncWritable(
+        [],
+        () => Promise.resolve('loaded value'),
+        () => Promise.reject(new Error('rejection')),
+        { trackState: true }
+      );
 
-    //   expect(get(myState).isLoading).toBe(true);
+      expect(get(myState).isLoading).toBe(true);
 
-    //   await myStore.load();
+      await myStore.load();
 
-    //   expect(get(myState).isLoaded).toBe(true);
+      expect(get(myState).isLoaded).toBe(true);
 
-    //   const setPromise = myStore.set('intermediate value');
+      const setPromise = myStore.set('intermediate value');
 
-    //   expect(get(myState).isWriting).toBe(true);
+      expect(get(myState).isWriting).toBe(true);
 
+<<<<<<< HEAD
 <<<<<<< HEAD
       await setPromise.catch(vi.fn());
 ||||||| parent of 7cc4482 (mostly working except for rejections)
@@ -1277,8 +1413,13 @@ describe('trackState', () => {
 =======
     //   await setPromise.catch(jest.fn());
 >>>>>>> 7cc4482 (mostly working except for rejections)
+||||||| parent of b2be866 (broke something)
+    //   await setPromise.catch(jest.fn());
+=======
+      await setPromise.catch(jest.fn());
+>>>>>>> b2be866 (broke something)
 
-    //   expect(get(myState).isError).toBe(true);
-    // });
+      expect(get(myState).isError).toBe(true);
+    });
   });
 });

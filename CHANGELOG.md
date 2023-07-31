@@ -5,6 +5,7 @@ notes:
 - state store now always included
 - all mapping load functions are rebounced by default
 - if an async store loses all subscriptions and then gains one the mapping load function will always evaluate even if the inputs have not changed
+- can't use stores to hold errors
 
 ## 1.0.17 (2023-6-20)
 
