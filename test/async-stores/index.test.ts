@@ -103,7 +103,7 @@ describe('asyncWritable', () => {
         { initial: 'initial' }
       );
 
-      myAsyncDerived.subscribe(vi.fn);
+      myAsyncDerived.subscribe(vi.fn());
 
       expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
       await myAsyncDerived.load().catch(() => Promise.resolve());
@@ -220,12 +220,6 @@ describe('asyncWritable', () => {
       const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
         Promise.resolve(`derived from ${storeValue}`)
       );
-<<<<<<< HEAD
-      myAsyncDerived.subscribe(vi.fn());
-||||||| parent of 7cc4482 (mostly working except for rejections)
-      myAsyncDerived.subscribe(jest.fn);
-=======
->>>>>>> 7cc4482 (mostly working except for rejections)
 
       expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
     });
@@ -339,24 +333,12 @@ describe('asyncWritable', () => {
           }
         });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-        myStore.subscribe(vi.fn());
-||||||| parent of 7cc4482 (mostly working except for rejections)
-        myStore.subscribe(jest.fn());
-=======
-    //     myStore.subscribe(jest.fn());
->>>>>>> 7cc4482 (mostly working except for rejections)
-||||||| parent of b2be866 (broke something)
-    //     myStore.subscribe(jest.fn());
-=======
         let everErrored = false;
         myState.subscribe((state) => {
           if (state.isError) {
             everErrored = true;
           }
         });
->>>>>>> b2be866 (broke something)
 
         myParent.set('a');
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -423,7 +405,7 @@ describe('asyncWritable', () => {
         const myParent = writable();
         const { store: myStore, state: myState } = asyncDerived(myParent, load);
 
-        myStore.subscribe(jest.fn());
+        myStore.subscribe(vi.fn());
         myParent.set('one');
         let loadValue = await myStore.load();
         expect(loadValue).toBe('one');
@@ -478,7 +460,7 @@ describe('asyncWritable', () => {
         undefined,
         () => new Promise((resolve) => setTimeout(resolve, 1000))
       );
-      const mockLoad = jest
+      const mockLoad = vi
         .fn()
         .mockReturnValue('default')
         .mockResolvedValueOnce('first value')
@@ -491,13 +473,7 @@ describe('asyncWritable', () => {
           return `${$writableParent}: ${reloadValue}`;
         }
       );
-<<<<<<< HEAD
       myDerived.subscribe(vi.fn());
-||||||| parent of 7cc4482 (mostly working except for rejections)
-      myDerived.subscribe(jest.fn);
-=======
-      myDerived.subscribe(jest.fn());
->>>>>>> 7cc4482 (mostly working except for rejections)
       writableParent.set('A');
       writableParent.set('B');
       writableParent.set('C');
@@ -696,8 +672,6 @@ describe('asyncWritable', () => {
       expect(mappingWriteFunction).toHaveBeenCalledTimes(1);
     });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     it('still sets value when rejected', async () => {
       const mappingWriteFunction = vi.fn(() =>
         Promise.reject(new Error('any'))
@@ -709,56 +683,6 @@ describe('asyncWritable', () => {
         { initial: 'initial' }
       );
       myAsyncWritable.subscribe(vi.fn());
-||||||| parent of 7cc4482 (mostly working except for rejections)
-    it('still sets value when rejected', async () => {
-      const mappingWriteFunction = jest.fn(() =>
-        Promise.reject(new Error('any'))
-      );
-      const myAsyncWritable = asyncWritable(
-        writableParent,
-        () => Promise.reject(new Error('error')),
-        mappingWriteFunction,
-        { initial: 'initial' }
-      );
-      myAsyncWritable.subscribe(jest.fn);
-=======
-    // it('still sets value when rejected', async () => {
-    //   const mappingWriteFunction = jest.fn(() =>
-    //     Promise.reject(new Error('any'))
-    //   );
-    //   const myAsyncWritable = asyncWritable(
-    //     writableParent,
-    //     () => Promise.reject(new Error('error')),
-    //     mappingWriteFunction,
-    //     { initial: 'initial' }
-    //   );
-    //   myAsyncWritable.subscribe(jest.fn);
->>>>>>> 7cc4482 (mostly working except for rejections)
-||||||| parent of b2be866 (broke something)
-    // it('still sets value when rejected', async () => {
-    //   const mappingWriteFunction = jest.fn(() =>
-    //     Promise.reject(new Error('any'))
-    //   );
-    //   const myAsyncWritable = asyncWritable(
-    //     writableParent,
-    //     () => Promise.reject(new Error('error')),
-    //     mappingWriteFunction,
-    //     { initial: 'initial' }
-    //   );
-    //   myAsyncWritable.subscribe(jest.fn);
-=======
-    it('still sets value when rejected', async () => {
-      const mappingWriteFunction = jest.fn(() =>
-        Promise.reject(new Error('any'))
-      );
-      const myAsyncWritable = asyncWritable(
-        writableParent,
-        () => Promise.reject(new Error('error')),
-        mappingWriteFunction,
-        { initial: 'initial' }
-      );
-      myAsyncWritable.subscribe(jest.fn);
->>>>>>> b2be866 (broke something)
 
       expect(myAsyncWritable.load()).rejects.toStrictEqual(new Error('error'));
       await myAsyncWritable.load().catch(() => Promise.resolve());
@@ -915,29 +839,9 @@ describe('asyncWritable', () => {
       logAsyncErrors(undefined);
     });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     it('does not call error logger when no error', async () => {
       const errorLogger = vi.fn();
       logAsyncErrors(errorLogger);
-||||||| parent of 7cc4482 (mostly working except for rejections)
-    it('does not call error logger when no error', async () => {
-      const errorLogger = jest.fn();
-      logAsyncErrors(errorLogger);
-=======
-  //   it('does not call error logger when no error', async () => {
-  //     const errorLogger = jest.fn();
-  //     logAsyncErrors(errorLogger);
->>>>>>> 7cc4482 (mostly working except for rejections)
-||||||| parent of b2be866 (broke something)
-  //   it('does not call error logger when no error', async () => {
-  //     const errorLogger = jest.fn();
-  //     logAsyncErrors(errorLogger);
-=======
-    it('does not call error logger when no error', async () => {
-      const errorLogger = jest.fn();
-      logAsyncErrors(errorLogger);
->>>>>>> b2be866 (broke something)
 
       const myReadable = asyncReadable(undefined, () =>
         Promise.resolve('value')
@@ -947,35 +851,15 @@ describe('asyncWritable', () => {
       expect(errorLogger).not.toHaveBeenCalled();
     });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     it('does call error logger when async error', async () => {
       const errorLogger = vi.fn();
       logAsyncErrors(errorLogger);
-||||||| parent of 7cc4482 (mostly working except for rejections)
-    it('does call error logger when async error', async () => {
-      const errorLogger = jest.fn();
-      logAsyncErrors(errorLogger);
-=======
-  //   it('does call error logger when async error', async () => {
-  //     const errorLogger = jest.fn();
-  //     logAsyncErrors(errorLogger);
->>>>>>> 7cc4482 (mostly working except for rejections)
-||||||| parent of b2be866 (broke something)
-  //   it('does call error logger when async error', async () => {
-  //     const errorLogger = jest.fn();
-  //     logAsyncErrors(errorLogger);
-=======
-    it('does call error logger when async error', async () => {
-      const errorLogger = jest.fn();
-      logAsyncErrors(errorLogger);
->>>>>>> b2be866 (broke something)
 
       const myReadable = asyncReadable(undefined, () =>
         Promise.reject(new Error('error'))
       );
 
-      myReadable.subscribe(jest.fn());
+      myReadable.subscribe(vi.fn());
 
       // perform multiple loads and make sure logger only called once
       await safeLoad(myReadable);
@@ -1169,7 +1053,7 @@ describe('trackState', () => {
         { trackState: true }
       );
 
-      myStore.subscribe(jest.fn());
+      myStore.subscribe(vi.fn());
 
       expect(get(myState).isLoading).toBe(true);
 
@@ -1200,7 +1084,7 @@ describe('trackState', () => {
         { trackState: true }
       );
 
-      myStore.subscribe(jest.fn());
+      myStore.subscribe(vi.fn());
 
       expect(get(myState).isLoading).toBe(true);
 
@@ -1274,7 +1158,7 @@ describe('trackState', () => {
         { trackState: true }
       );
 
-      myStore.subscribe(jest.fn());
+      myStore.subscribe(vi.fn());
 
       expect(get(myState).isLoading).toBe(true);
 
@@ -1321,7 +1205,7 @@ describe('trackState', () => {
         { trackState: true, reloadable: true, debug: 'thing' }
       );
 
-      myStore.subscribe(jest.fn());
+      myStore.subscribe(vitest.fn());
 
       expect(get(myState).isLoading).toBe(true);
 
@@ -1349,7 +1233,7 @@ describe('trackState', () => {
         { trackState: true }
       );
 
-      myStore.subscribe(jest.fn());
+      myStore.subscribe(vi.fn());
 
       expect(get(myState).isLoading).toBe(true);
 
@@ -1405,19 +1289,7 @@ describe('trackState', () => {
 
       expect(get(myState).isWriting).toBe(true);
 
-<<<<<<< HEAD
-<<<<<<< HEAD
       await setPromise.catch(vi.fn());
-||||||| parent of 7cc4482 (mostly working except for rejections)
-      await setPromise.catch(jest.fn());
-=======
-    //   await setPromise.catch(jest.fn());
->>>>>>> 7cc4482 (mostly working except for rejections)
-||||||| parent of b2be866 (broke something)
-    //   await setPromise.catch(jest.fn());
-=======
-      await setPromise.catch(jest.fn());
->>>>>>> b2be866 (broke something)
 
       expect(get(myState).isError).toBe(true);
     });
