@@ -159,6 +159,7 @@ export const asyncWritable = <S extends Stores, T>(
 
   // called when store receives its first subscriber
   const onFirstSubscription: StartStopNotifier<T> = () => {
+    debuggy?.('onFirstSubscription');
     setCurrentLoadPromise();
     parentValues = getAll(stores);
     setState('LOADING');
@@ -195,13 +196,18 @@ export const asyncWritable = <S extends Stores, T>(
       })
     );
 
-    // called on losing last subscriber
     cleanupSubscriptions = () => {
+      debuggy?.('cleaning up subscriptions');
       parentUnsubscribers.map((unsubscriber) => unsubscriber());
       ready = false;
       changeReceived = false;
     };
-    cleanupSubscriptions();
+
+    // called on losing last subscriber
+    return () => {
+      debuggy?.('stopping store');
+      cleanupSubscriptions();
+    };
   };
 
   thisStore = writable(initial, onFirstSubscription);
@@ -302,13 +308,14 @@ export const asyncWritable = <S extends Stores, T>(
 
   const reset = getStoreTestingMode()
     ? () => {
-        cleanupSubscriptions();
+        // cleanupSubscriptions?.();
         thisStore.set(initial);
         setState('LOADING');
         ready = false;
         changeReceived = false;
-        currentLoadPromise = undefined;
-        setCurrentLoadPromise();
+        // currentLoadPromise = undefined;
+        // setCurrentLoadPromise();
+        // rebouncedSelfLoad.abort();
       }
     : undefined;
 
