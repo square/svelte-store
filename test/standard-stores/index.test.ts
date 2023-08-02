@@ -14,10 +14,10 @@ describe('synchronous derived', () => {
   );
   let reloadableGrandparent: Loadable<string>;
   let derivedParent: Loadable<string>;
-  let mockReload = jest.fn();
+  let mockReload = vi.fn();
 
   beforeEach(() => {
-    mockReload = jest
+    mockReload = vi
       .fn()
       .mockReturnValue('default')
       .mockResolvedValueOnce('first value')
@@ -43,7 +43,7 @@ describe('synchronous derived', () => {
         ([$nonAsyncParent, $loadableParent, $derivedParent]) =>
           `derived from ${$nonAsyncParent}, ${$loadableParent}, ${$derivedParent}`
       );
-      myDerived.subscribe(jest.fn);
+      myDerived.subscribe(vi.fn());
 
       expect(myDerived.load()).resolves.toBe(
         'derived from writable, loadable, FIRST VALUE'
@@ -63,7 +63,7 @@ describe('synchronous derived', () => {
         nonAsyncParent,
         ($nonAsyncParent) => $nonAsyncParent
       );
-      myDerived.subscribe(jest.fn);
+      myDerived.subscribe(vi.fn());
 
       nonAsyncParent.set('A');
       nonAsyncParent.set('B');
@@ -153,12 +153,12 @@ describe('readable/writable stores', () => {
     });
 
     it('fires unsubscribe callback when unsubscribed', () => {
-      const mockStop = jest.fn();
+      const mockStop = vi.fn();
       const myWritable = writable(undefined, (set) => {
         set('initial');
         return mockStop;
       });
-      const unsubscribe = myWritable.subscribe(jest.fn());
+      const unsubscribe = myWritable.subscribe(vi.fn());
 
       expect(mockStop).not.toHaveBeenCalled();
       unsubscribe();
@@ -187,12 +187,12 @@ describe('readable/writable stores', () => {
     });
 
     it('fires unsubscribe callback when unsubscribed', () => {
-      const mockUnsubscribe = jest.fn();
+      const mockUnsubscribe = vi.fn();
       const myReadable = readable(undefined, (set) => {
         set('initial');
         return mockUnsubscribe;
       });
-      const unsubscribe = myReadable.subscribe(jest.fn());
+      const unsubscribe = myReadable.subscribe(vi.fn());
 
       expect(mockUnsubscribe).not.toHaveBeenCalled();
       unsubscribe();
@@ -211,7 +211,7 @@ describe('readable/writable stores', () => {
     });
 
     it('runs stop callback after loading with no subscriptions', async () => {
-      const stop = jest.fn();
+      const stop = vi.fn();
 
       const myReadable = readable(undefined, (set) => {
         setTimeout(() => {

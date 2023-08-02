@@ -70,7 +70,7 @@ describe('asyncClient', () => {
     };
 
     it("'set' proxy handler", () => {
-      const myMock = jest.fn();
+      const myMock = vi.fn();
 
       const myWritable = writable<MyClient>();
 
@@ -91,7 +91,7 @@ describe('asyncClient', () => {
     });
 
     it("'defineProperty' proxy handler", () => {
-      const myMock = jest.fn();
+      const myMock = vi.fn();
 
       const myWritable = writable<MyClient>();
 

@@ -25,7 +25,7 @@ export const asyncClient = <S extends Loadable<unknown>>(
   return new Proxy(emptyFunction, {
     get: (proxiedFunction, property) => {
       if (proxiedFunction[property]) {
-        // this ensures that jest is able to identify the proxy
+        // this ensures that vitest is able to identify the proxy
         // when setting up spies on its properties
         return proxiedFunction[property];
       }

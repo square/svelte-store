@@ -185,7 +185,7 @@ describe('persisted', () => {
         });
 
         it('uses stored value if present', async () => {
-          const mockLoad = jest.fn();
+          const mockLoad = vi.fn();
 
           setStorage('key', 'already set');
 
@@ -247,7 +247,7 @@ describe('persisted', () => {
         });
 
         it('reloads reloadable default', async () => {
-          const mockLoad = jest
+          const mockLoad = vi
             .fn()
             .mockResolvedValueOnce('first value')
             .mockResolvedValueOnce('second value');

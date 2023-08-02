@@ -12,7 +12,7 @@ import {
 enableStoreTestingMode();
 
 describe('loadAll / reloadAll utils', () => {
-  const mockReload = jest.fn();
+  const mockReload = vi.fn();
   const myLoadable = asyncReadable(undefined, () => Promise.resolve('loaded'));
   const myReloadable = asyncReadable(undefined, mockReload, {
     reloadable: true,
@@ -99,7 +99,7 @@ describe('rebounce', () => {
     'The function was rebounced.',
     'AbortError'
   );
-  const interval = jest.fn();
+  const interval = vi.fn();
 
   beforeEach(() => {
     interval.mockReset();
@@ -139,7 +139,7 @@ describe('rebounce', () => {
   });
 
   it('works with timer', () => {
-    const getValue = jest
+    const getValue = vi
       .fn()
       .mockReturnValueOnce('one')
       .mockReturnValueOnce('two')
