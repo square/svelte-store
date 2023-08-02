@@ -14,7 +14,7 @@ import {
 
 enableStoreTestingMode();
 
-const mockedFetch = jest.fn();
+const mockedFetch = vi.fn();
 const myReadable = asyncReadable('initial', () => mockedFetch());
 
 beforeEach(() => {
@@ -50,7 +50,7 @@ describe('can be reset for different tests', () => {
 describe('asyncClient', () => {
   it('can spy on client properties', async () => {
     const myClient = asyncClient(readable({ myFunc: () => 'some string' }));
-    const myFuncSpy = jest.spyOn(myClient, 'myFunc');
+    const myFuncSpy = vi.spyOn(myClient, 'myFunc');
 
     expect(myFuncSpy).toHaveBeenCalledTimes(0);
 
@@ -66,10 +66,10 @@ describe('asyncClient', () => {
     );
     const clientB = asyncClient(readable({ myFunc: () => 'clientB' }));
 
-    const subscribe = jest.spyOn(clientA, 'subscribe');
+    const subscribe = vi.spyOn(clientA, 'subscribe');
     subscribe.mockImplementation((callbackFn) => {
       callbackFn({ myFunc: () => 'mockedA' });
-      return jest.fn();
+      return vi.fn();
     });
 
     expect(get(clientA).myFunc()).toBe('mockedA');
@@ -89,7 +89,7 @@ describe('enableStoreTestingMode', () => {
       persisted,
     ].forEach((store: CallableFunction) => {
       flagStoreCreated(false);
-      store([], jest.fn);
+      store([], vi.fn);
       expect(() => enableStoreTestingMode()).toThrowError();
     });
   });

@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
-    "types": ["node", "jest"],
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
     "declaration": true,
     "outDir": "./lib",
     "sourceMap": true,
@@ -10,6 +13,12 @@
     "module": "es2022",
     "strict": false,
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules/*",
+    "__sapper__/*",
+    "public/*"
+  ],
 }
