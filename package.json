@@ -24,7 +24,7 @@
     "eslint": "^7.32.0",
     "eslint-plugin-square": "^20.0.2",
     "jsdom": "^22.1.0",
-    "svelte": "^3.0.0",
+    "svelte": "^4.1.2",
     "typescript": "^4.5.5",
     "vitest": "^0.34.1"
   },
@@ -32,7 +32,7 @@
     "cookie-storage": "^6.1.0"
   },
   "peerDependencies": {
-    "svelte": "^3.0.0"
+    "svelte": "^4.1.2"
   },
   "license": "ISC",
   "author": "Square",
