@@ -1,6 +1,4 @@
-import { Readable, Updater, Writable } from 'svelte/store';
-
-export type State = 'LOADING' | 'LOADED' | 'RELOADING' | 'ERROR' | 'WRITING';
+import { Readable, Updater, Writable } from "svelte/store";
 
 export type LoadState = {
   isLoading: boolean;
@@ -8,8 +6,9 @@ export type LoadState = {
   isLoaded: boolean;
   isWriting: boolean;
   isError: boolean;
-  isPending: boolean; // LOADING or RELOADING
-  isSettled: boolean; // LOADED or ERROR
+  error: any | null; // if isError
+  isPending: boolean; // isLoading or isReloading
+  isSettled: boolean; // isLoaded or isError
 };
 
 export type VisitedMap = WeakMap<Readable<unknown>, Promise<unknown>>;

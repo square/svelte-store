@@ -1,4 +1,4 @@
-import { get, type Updater, type Readable, writable } from 'svelte/store';
+import { get, type Updater, type Readable, writable } from "svelte/store";
 import type {
   AsyncStoreOptions,
   Loadable,
@@ -8,28 +8,76 @@ import type {
   StoresValues,
   WritableLoadable,
   VisitedMap,
-} from './types.js';
+} from "./types.js";
 import {
   anyReloadable,
   getStoresArray,
   reloadAll,
   loadAll,
-} from '../utils/index.js';
-import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
+} from "../utils/index.js";
+import { flagStoreCreated, getStoreTestingMode, logError } from "../config.js";
 
 // STORES
 
-const getLoadState = (stateString: State): LoadState => {
-  return {
-    isLoading: stateString === 'LOADING',
-    isReloading: stateString === 'RELOADING',
-    isLoaded: stateString === 'LOADED',
-    isWriting: stateString === 'WRITING',
-    isError: stateString === 'ERROR',
-    isPending: stateString === 'LOADING' || stateString === 'RELOADING',
-    isSettled: stateString === 'LOADED' || stateString === 'ERROR',
-  };
-};
+const getLoadingState = (): LoadState =>
+  Object.freeze({
+    isLoading: true,
+    isReloading: false,
+    isLoaded: false,
+    isWriting: false,
+    isError: false,
+    error: null,
+    isPending: true,
+    isSettled: false,
+  });
+
+const getReloadingState = (): LoadState =>
+  Object.freeze({
+    isLoading: false,
+    isReloading: true,
+    isLoaded: false,
+    isWriting: false,
+    isError: false,
+    error: null,
+    isPending: true,
+    isSettled: false,
+  });
+
+const getLoadedState = (): LoadState =>
+  Object.freeze({
+    isLoading: false,
+    isReloading: false,
+    isLoaded: true,
+    isWriting: false,
+    isError: false,
+    error: null,
+    isPending: false,
+    isSettled: true,
+  });
+
+const getWritingState = (): LoadState =>
+  Object.freeze({
+    isLoading: false,
+    isReloading: false,
+    isLoaded: false,
+    isWriting: true,
+    isError: false,
+    error: null,
+    isPending: true,
+    isSettled: false,
+  });
+
+const getErrorState = (error: any): LoadState =>
+  Object.freeze({
+    isLoading: false,
+    isReloading: false,
+    isLoaded: false,
+    isWriting: false,
+    isError: true,
+    error,
+    isPending: false,
+    isSettled: true,
+  });
 
 /**
  * Generate a Loadable store that is considered 'loaded' after resolving synchronous or asynchronous behavior.
@@ -61,10 +109,10 @@ export const asyncWritable = <S extends Stores, T>(
   const { reloadable, trackState, initial } = options;
 
   const loadState = trackState
-    ? writable<LoadState>(getLoadState('LOADING'))
+    ? writable<LoadState>(getLoadingState())
     : undefined;
 
-  const setState = (state: State) => loadState?.set(getLoadState(state));
+  const setState = (state: LoadState) => loadState?.set(state);
 
   // stringified representation of parents' loaded values
   // used to track whether a change has occurred and the store reloaded
@@ -80,9 +128,9 @@ export const asyncWritable = <S extends Stores, T>(
     try {
       return await mappingLoadFunction(values);
     } catch (e) {
-      if (e.name !== 'AbortError') {
+      if (e.name !== "AbortError") {
         logError(e);
-        setState('ERROR');
+        setState(getErrorState(e));
       }
       throw e;
     }
@@ -116,9 +164,9 @@ export const asyncWritable = <S extends Stores, T>(
 
     try {
       await loadParentStores;
-    } catch {
+    } catch (e) {
       currentLoadPromise = loadParentStores as Promise<T>;
-      setState('ERROR');
+      setState(getErrorState(e));
       return currentLoadPromise;
     }
 
@@ -141,21 +189,21 @@ export const asyncWritable = <S extends Stores, T>(
     const loadAndSet = async () => {
       latestLoadAndSet = loadAndSet;
       if (get(loadState)?.isSettled) {
-        setState('RELOADING');
+        setState(getReloadingState());
       }
       try {
         const finalValue = await tryLoad(loadInput);
         thisStore.set(finalValue);
-        setState('LOADED');
+        setState(getLoadedState());
         return finalValue;
       } catch (e) {
         // if a load is aborted, resolve to the current value of the store
-        if (e.name === 'AbortError') {
+        if (e.name === "AbortError") {
           // Normally when a load is aborted we want to leave the state as is.
           // However if the latest load is aborted we change back to LOADED
           // so that it does not get stuck LOADING/RELOADIN'.
           if (loadAndSet === latestLoadAndSet) {
-            setState('LOADED');
+            setState(getLoadedState());
           }
           return get(thisStore);
         }
@@ -171,7 +219,7 @@ export const asyncWritable = <S extends Stores, T>(
     updater: Updater<T>,
     persist?: boolean
   ) => {
-    setState('WRITING');
+    setState(getWritingState());
     let oldValue: T;
     try {
       oldValue = await loadDependenciesThenSet(loadAll);
@@ -200,11 +248,11 @@ export const asyncWritable = <S extends Stores, T>(
         }
       } catch (e) {
         logError(e);
-        setState('ERROR');
+        setState(getErrorState(e));
         throw e;
       }
     }
-    setState('LOADED');
+    setState(getLoadingState());
   };
 
   // required properties
@@ -221,12 +269,12 @@ export const asyncWritable = <S extends Stores, T>(
     ? async (visitedMap?: VisitedMap) => {
         const visitMap = visitedMap ?? new WeakMap();
         const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
-        setState('RELOADING');
+        setState(getReloadingState());
         const result = await loadDependenciesThenSet(
           reloadAndTrackVisits,
           reloadable
         );
-        setState('LOADED');
+        setState(getLoadedState());
         return result;
       }
     : undefined;
@@ -237,7 +285,7 @@ export const asyncWritable = <S extends Stores, T>(
   const reset = getStoreTestingMode()
     ? () => {
         thisStore.set(initial);
-        setState('LOADING');
+        setState(getLoadingState());
         loadedValuesString = undefined;
         currentLoadPromise = undefined;
       }
@@ -304,7 +352,7 @@ export const asyncDerived = <S extends Stores, T>(
 export const asyncReadable = <T>(
   initial: T,
   loadFunction: () => Promise<T>,
-  options?: Omit<AsyncStoreOptions<T>, 'initial'>
+  options?: Omit<AsyncStoreOptions<T>, "initial">
 ): Loadable<T> => {
   return asyncDerived([], loadFunction, { ...options, initial });
 };
