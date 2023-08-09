@@ -19,15 +19,29 @@ import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
 
 // STORES
 
-const getLoadState = (stateString: State): LoadState => {
+const getLoadState = (stateString: Exclude<State, 'ERROR'>): LoadState => {
   return {
     isLoading: stateString === 'LOADING',
     isReloading: stateString === 'RELOADING',
     isLoaded: stateString === 'LOADED',
     isWriting: stateString === 'WRITING',
-    isError: stateString === 'ERROR',
     isPending: stateString === 'LOADING' || stateString === 'RELOADING',
-    isSettled: stateString === 'LOADED' || stateString === 'ERROR',
+    isSettled: stateString === 'LOADED',
+    isError: false,
+    error: null,
+  };
+};
+
+const getErrorLoadState = (error: unknown): LoadState => {
+  return {
+    isLoading: false,
+    isReloading: false,
+    isLoaded: false,
+    isWriting: false,
+    isError: true,
+    isPending: false,
+    isSettled: true,
+    error,
   };
 };
 
@@ -64,7 +78,11 @@ export const asyncWritable = <S extends Stores, T>(
     ? writable<LoadState>(getLoadState('LOADING'))
     : undefined;
 
-  const setState = (state: State) => loadState?.set(getLoadState(state));
+  const setState = (state: Exclude<State, 'ERROR'>) =>
+    loadState?.set(getLoadState(state));
+
+  const setErrorState = (error: any) =>
+    loadState?.set(getErrorLoadState(error));
 
   // stringified representation of parents' loaded values
   // used to track whether a change has occurred and the store reloaded
@@ -82,7 +100,7 @@ export const asyncWritable = <S extends Stores, T>(
     } catch (e) {
       if (e.name !== 'AbortError') {
         logError(e);
-        setState('ERROR');
+        setErrorState(e);
       }
       throw e;
     }
@@ -116,9 +134,9 @@ export const asyncWritable = <S extends Stores, T>(
 
     try {
       await loadParentStores;
-    } catch {
+    } catch (e) {
       currentLoadPromise = loadParentStores as Promise<T>;
-      setState('ERROR');
+      setErrorState(e);
       return currentLoadPromise;
     }
 
@@ -200,7 +218,7 @@ export const asyncWritable = <S extends Stores, T>(
         }
       } catch (e) {
         logError(e);
-        setState('ERROR');
+        setErrorState(e);
         throw e;
       }
     }

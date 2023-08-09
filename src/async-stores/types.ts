@@ -10,6 +10,7 @@ export type LoadState = {
   isError: boolean;
   isPending: boolean; // LOADING or RELOADING
   isSettled: boolean; // LOADED or ERROR
+  error: any | null; // if promise rejected, this will contain the error object
 };
 
 export type VisitedMap = WeakMap<Readable<unknown>, Promise<unknown>>;
