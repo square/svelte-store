@@ -42,7 +42,6 @@ export type WritableLoadable<T> = AsyncLoadable<T> & AsyncWritable<T>;
 export interface AsyncStoreOptions<T> {
   reloadable?: true;
   trackState?: true;
-  debug?: string;
   initial?: T;
   rebounceDelay?: number;
 }
