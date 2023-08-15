@@ -103,10 +103,8 @@ export const asyncWritable = <S extends Stores, T>(
     return currentLoadPromise as T;
   };
 
-  let parentValues: StoresValues<S>;
-
   let mostRecentLoadTracker: Record<string, never>;
-  const selfLoadThenSet = async () => {
+  const selfLoadThenSet = async (parentValues: StoresValues<S>) => {
     const thisLoadTracker = {};
     mostRecentLoadTracker = thisLoadTracker;
 
@@ -148,15 +146,14 @@ export const asyncWritable = <S extends Stores, T>(
   // called when store receives its first subscriber
   const onFirstSubscription: StartStopNotifier<T> = () => {
     setCurrentLoadPromise();
-    parentValues = getAll(stores);
     setState('LOADING');
 
     const initialLoad = async () => {
       try {
-        parentValues = await loadAll(stores);
+        const parentValues = await loadAll(stores);
         ready = true;
         changeReceived = false;
-        selfLoadThenSet();
+        selfLoadThenSet(parentValues);
       } catch (error) {
         ready = true;
         changeReceived = false;
@@ -173,10 +170,10 @@ export const asyncWritable = <S extends Stores, T>(
           setState('RELOADING');
         }
         ready = false;
-        parentValues = await loadAll(stores);
+        const parentValues = await loadAll(stores);
         // eslint-disable-next-line require-atomic-updates
         ready = true;
-        selfLoadThenSet();
+        selfLoadThenSet(parentValues);
       }
     };
 
@@ -216,7 +213,7 @@ export const asyncWritable = <S extends Stores, T>(
       try {
         const writeResponse = (await writePersistFunction(
           newValue,
-          parentValues,
+          getAll(stores),
           oldValue
         )) as T;
 
@@ -260,10 +257,10 @@ export const asyncWritable = <S extends Stores, T>(
 
     const visitMap = visitedMap ?? new WeakMap();
     try {
-      parentValues = await reloadAll(stores, visitMap);
+      const parentValues = await reloadAll(stores, visitMap);
       ready = true;
       if (changeReceived || reloadable || wasErrored) {
-        selfLoadThenSet();
+        selfLoadThenSet(parentValues);
       } else {
         resolveCurrentLoad(get(thisStore));
         setState('LOADED');
