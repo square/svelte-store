@@ -112,12 +112,6 @@ export const asyncWritable = <S extends Stores, T>(
 
   let mostRecentLoadTracker: Record<string, never>;
   const selfLoadThenSet = async () => {
-    if (get(loadState).isSettled) {
-      setCurrentLoadPromise();
-      debuggy?.('setting RELOADING');
-      setState('RELOADING');
-    }
-
     const thisLoadTracker = {};
     mostRecentLoadTracker = thisLoadTracker;
 
@@ -182,20 +176,24 @@ export const asyncWritable = <S extends Stores, T>(
     };
     initialLoad();
 
-    const parentUnsubscribers = getStoresArray(stores).map((store, i) =>
-      store.subscribe((value) => {
-        debuggy?.('received value', value);
-        changeReceived = true;
-        if (Array.isArray(stores)) {
-          parentValues[i] = value;
-        } else {
-          parentValues = value as StoresValues<S>;
+    const onSubscriptionUpdate = async () => {
+      changeReceived = true;
+      if (ready) {
+        if (get(loadState).isSettled) {
+          setCurrentLoadPromise();
+          debuggy?.('setting RELOADING');
+          setState('RELOADING');
         }
-        if (ready) {
-          debuggy?.('proceeding because ready');
-          selfLoadThenSet();
-        }
-      })
+        ready = false;
+        parentValues = await loadAll(stores);
+        // eslint-disable-next-line require-atomic-updates
+        ready = true;
+        selfLoadThenSet();
+      }
+    };
+
+    const parentUnsubscribers = getStoresArray(stores).map((store) =>
+      store.subscribe(onSubscriptionUpdate)
     );
 
     cleanupSubscriptions = () => {
