@@ -134,23 +134,25 @@ export const asyncWritable = <S extends Stores, T>(
       resolveCurrentLoad(finalValue);
     } catch (error) {
       debuggy?.('caught error', error);
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        if (thisLoadTracker === mostRecentLoadTracker) {
+          // Normally when a load is aborted we want to leave the state as is.
+          // However if the latest load is aborted we change back to LOADED
+          // so that it does not get stuck LOADING/RELOADING.
+          setState('LOADED');
+          resolveCurrentLoad(get(thisStore));
+        }
+      } else {
         logError(error);
         setState('ERROR');
         debuggy?.('resolving current load with error', error);
         // Resolve with an Error rather than rejecting so that unhandled rejections
-        // are not created by the stores internal processes. These errors are
+        // are not created by the store's internal processes. These errors are
         // converted back to promise rejections via the load or reload functions,
         // allowing for proper handling after that point.
         // If your stack trace takes you here, make sure your store's
         // selfLoadFunction rejects with an Error to preserve the full trace.
         resolveCurrentLoad(error instanceof Error ? error : new Error(error));
-      } else if (thisLoadTracker === mostRecentLoadTracker) {
-        // Normally when a load is aborted we want to leave the state as is.
-        // However if the latest load is aborted we change back to LOADED
-        // so that it does not get stuck LOADING/RELOADING.
-        setState('LOADED');
-        resolveCurrentLoad(get(thisStore));
       }
     }
   };
@@ -308,14 +310,10 @@ export const asyncWritable = <S extends Stores, T>(
 
   const reset = getStoreTestingMode()
     ? () => {
-        // cleanupSubscriptions?.();
         thisStore.set(initial);
         setState('LOADING');
         ready = false;
         changeReceived = false;
-        // currentLoadPromise = undefined;
-        // setCurrentLoadPromise();
-        // rebouncedSelfLoad.abort();
       }
     : undefined;
 
