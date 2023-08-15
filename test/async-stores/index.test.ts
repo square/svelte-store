@@ -224,7 +224,7 @@ describe('asyncWritable', () => {
       expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
     });
 
-    it('correcly unsubscribes from parents', async () => {
+    it('correctly unsubscribes from parents', async () => {
       const writableParent = writable('initial');
       const firstDerivedLoad = vi.fn(($parent) =>
         Promise.resolve(`${$parent} first`)
@@ -254,7 +254,7 @@ describe('asyncWritable', () => {
       firstUnsubscribe();
       writableParent.set('updated');
 
-      await new Promise((resolve) => setTimeout(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(firstValue).toBe('initial first');
       expect(secondValue).toBe('updated second');
@@ -290,6 +290,7 @@ describe('asyncWritable', () => {
         myParent.set('a');
         await new Promise((resolve) => setTimeout(resolve, 50));
         expect(get(myState).isLoading).toBe(true);
+
         myParent.set('b');
         await new Promise((resolve) => setTimeout(resolve, 50));
         expect(get(myState).isLoading).toBe(true);
@@ -509,7 +510,48 @@ describe('asyncWritable', () => {
       expect(get(myDerived)).toBe('L: first value');
     });
 
-    // it('calls selfLoad once when multiple ')
+    it('updates once during concurrent changes', async () => {
+      const grandParentLoad = vi
+        .fn()
+        .mockResolvedValueOnce('first')
+        .mockResolvedValueOnce('second')
+        .mockResolvedValueOnce('third');
+
+      const grandParent = asyncReadable(undefined, grandParentLoad, {
+        reloadable: true,
+      });
+      const parentA = derived(grandParent, (value) => value);
+      const parentB = asyncDerived(
+        grandParent,
+        (value) =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve(value.toUpperCase()), 100)
+          )
+      );
+      const load = vi.fn(
+        ([valueA, valueB]) =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve(valueA + valueB), 100)
+          )
+      );
+      const myLoadable = asyncDerived([parentA, parentB], load, {
+        debug: 'myLoadable',
+      });
+      myLoadable.subscribe(vi.fn());
+
+      let result = await myLoadable.load();
+      expect(result).toBe('firstFIRST');
+      expect(load).toHaveBeenCalledOnce();
+
+      result = await myLoadable.reload();
+      expect(result).toBe('secondSECOND');
+      expect(load).toHaveBeenCalledTimes(2);
+
+      await grandParent.reload();
+      result = await myLoadable.load();
+      expect(result).toBe('thirdTHIRD');
+      expect(load).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('no parents asyncWritable', () => {
