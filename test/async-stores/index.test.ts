@@ -9,8 +9,6 @@ import {
   derived,
   readable,
   writable,
-  isReloadable,
-  rebounce,
   safeLoad,
 } from '../../src';
 
@@ -398,7 +396,7 @@ describe('asyncWritable', () => {
 
         const load = () => {
           const valueToReturn = getFinalValue();
-          console.log('valueToReturn', valueToReturn);
+
           return new Promise<string>((resolve) =>
             setTimeout(() => resolve(valueToReturn), 100)
           );
@@ -406,7 +404,6 @@ describe('asyncWritable', () => {
 
         const myLoadable = asyncReadable('initial', load, {
           reloadable: true,
-          debug: 'my thing:',
         });
 
         expect(myLoadable.load()).resolves.toBe('second');
@@ -534,9 +531,7 @@ describe('asyncWritable', () => {
             setTimeout(() => resolve(valueA + valueB), 100)
           )
       );
-      const myLoadable = asyncDerived([parentA, parentB], load, {
-        debug: 'myLoadable',
-      });
+      const myLoadable = asyncDerived([parentA, parentB], load);
       myLoadable.subscribe(vi.fn());
 
       let result = await myLoadable.load();
@@ -1263,7 +1258,7 @@ describe('trackState', () => {
       const { store: myStore, state: myState } = asyncReadable(
         'initial',
         load,
-        { trackState: true, reloadable: true, debug: 'thing' }
+        { trackState: true, reloadable: true }
       );
 
       myStore.subscribe(vitest.fn());
@@ -1286,7 +1281,6 @@ describe('trackState', () => {
         .mockRejectedValueOnce('failure');
       const myParent = asyncReadable('initial', parentLoad, {
         reloadable: true,
-        debug: 'parent:',
       });
       const { store: myStore, state: myState } = asyncDerived(
         myParent,

@@ -72,9 +72,7 @@ export const asyncWritable = <S extends Stores, T>(
   let thisStore: Writable<T>;
 
   flagStoreCreated();
-  const { reloadable, initial, debug, rebounceDelay } = options;
-
-  const debuggy = debug ? (...args) => console.log(debug, ...args) : undefined;
+  const { reloadable, initial, rebounceDelay } = options;
 
   const rebouncedSelfLoad = rebounce(selfLoadFunction, rebounceDelay);
 
@@ -91,16 +89,13 @@ export const asyncWritable = <S extends Stores, T>(
   let resolveCurrentLoad: (value: T | PromiseLike<T> | Error) => void;
 
   const setCurrentLoadPromise = () => {
-    debuggy?.('setCurrentLoadPromise -> new load promise generated');
     currentLoadPromise = new Promise((resolve) => {
       resolveCurrentLoad = resolve;
     });
   };
 
   const getLoadedValueOrThrow = async (callback?: () => void) => {
-    debuggy?.('getLoadedValue -> starting await current load');
     const result = await currentLoadPromise;
-    debuggy?.('getLoadedValue -> got loaded result', result);
     callback?.();
     if (result instanceof Error) {
       throw result;
@@ -118,16 +113,13 @@ export const asyncWritable = <S extends Stores, T>(
     try {
       // parentValues
       const finalValue = (await rebouncedSelfLoad(parentValues)) as T;
-      debuggy?.('setting value');
       thisStore.set(finalValue);
 
       if (!get(loadState).isWriting) {
-        debuggy?.('setting LOADED');
         setState('LOADED');
       }
       resolveCurrentLoad(finalValue);
     } catch (error) {
-      debuggy?.('caught error', error);
       if (error.name === 'AbortError') {
         if (thisLoadTracker === mostRecentLoadTracker) {
           // Normally when a load is aborted we want to leave the state as is.
@@ -139,7 +131,7 @@ export const asyncWritable = <S extends Stores, T>(
       } else {
         logError(error);
         setState('ERROR');
-        debuggy?.('resolving current load with error', error);
+
         // Resolve with an Error rather than rejecting so that unhandled rejections
         // are not created by the store's internal processes. These errors are
         // converted back to promise rejections via the load or reload functions,
@@ -155,16 +147,13 @@ export const asyncWritable = <S extends Stores, T>(
 
   // called when store receives its first subscriber
   const onFirstSubscription: StartStopNotifier<T> = () => {
-    debuggy?.('onFirstSubscription');
     setCurrentLoadPromise();
     parentValues = getAll(stores);
     setState('LOADING');
 
     const initialLoad = async () => {
-      debuggy?.('initial load called');
       try {
         parentValues = await loadAll(stores);
-        debuggy?.('setting ready');
         ready = true;
         changeReceived = false;
         selfLoadThenSet();
@@ -181,7 +170,6 @@ export const asyncWritable = <S extends Stores, T>(
       if (ready) {
         if (get(loadState).isSettled) {
           setCurrentLoadPromise();
-          debuggy?.('setting RELOADING');
           setState('RELOADING');
         }
         ready = false;
@@ -197,17 +185,13 @@ export const asyncWritable = <S extends Stores, T>(
     );
 
     cleanupSubscriptions = () => {
-      debuggy?.('cleaning up subscriptions');
       parentUnsubscribers.map((unsubscriber) => unsubscriber());
       ready = false;
       changeReceived = false;
     };
 
     // called on losing last subscriber
-    return () => {
-      debuggy?.('stopping store');
-      cleanupSubscriptions();
-    };
+    return cleanupSubscriptions;
   };
 
   thisStore = writable(initial, onFirstSubscription);
@@ -242,7 +226,6 @@ export const asyncWritable = <S extends Stores, T>(
         }
       } catch (error) {
         logError(error);
-        debuggy?.('setting ERROR');
         setState('ERROR');
         resolveCurrentLoad(newValue);
         throw error;
@@ -270,19 +253,15 @@ export const asyncWritable = <S extends Stores, T>(
     ready = false;
     changeReceived = false;
     if (get(loadState).isSettled) {
-      debuggy?.('new load promise');
       setCurrentLoadPromise();
     }
-    debuggy?.('setting RELOADING from reload');
     const wasErrored = get(loadState).isError;
     setState('RELOADING');
 
     const visitMap = visitedMap ?? new WeakMap();
     try {
       parentValues = await reloadAll(stores, visitMap);
-      debuggy?.('parentValues', parentValues);
       ready = true;
-      debuggy?.(changeReceived, reloadable, wasErrored);
       if (changeReceived || reloadable || wasErrored) {
         selfLoadThenSet();
       } else {
@@ -290,7 +269,6 @@ export const asyncWritable = <S extends Stores, T>(
         setState('LOADED');
       }
     } catch (error) {
-      debuggy?.('caught error during reload');
       setState('ERROR');
       resolveCurrentLoad(error);
     }
