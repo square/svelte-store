@@ -1,7 +1,6 @@
 import {
   asyncReadable,
   Loadable,
-  readable,
   loadAll,
   rebounce,
   reloadAll,
@@ -16,7 +15,6 @@ describe('loadAll / reloadAll utils', () => {
   const myLoadable = asyncReadable(undefined, () => Promise.resolve('loaded'));
   const myReloadable = asyncReadable(undefined, mockReload, {
     reloadable: true,
-    debug: 'myReloadable:',
   });
   const badLoadable = {
     load: () => Promise.reject(new Error('E')),
@@ -62,28 +60,26 @@ describe('loadAll / reloadAll utils', () => {
     });
 
     it('reloads and resolves to values of all stores', async () => {
-      console.log('starting test');
       await loadAll([myLoadable, myReloadable]);
-      console.log('starting reload');
       expect(reloadAll([myLoadable, myReloadable])).resolves.toStrictEqual([
         'loaded',
         'second value',
       ]);
     });
 
-    // it('handles rejection', () => {
-    //   expect(reloadAll([myLoadable, badLoadable])).rejects.toStrictEqual(
-    //     new Error('F')
-    //   );
-    // });
+    it('handles rejection', () => {
+      expect(reloadAll([myLoadable, badLoadable])).rejects.toStrictEqual(
+        new Error('F')
+      );
+    });
 
-    // it('does not reload already visited store', () => {
-    //   const visitedMap = new WeakMap();
-    //   visitedMap.set(myReloadable, myReloadable.reload());
-    //   expect(reloadAll(myReloadable, visitedMap)).resolves.toStrictEqual(
-    //     'first value'
-    //   );
-    // });
+    it('does not reload already visited store', () => {
+      const visitedMap = new WeakMap();
+      visitedMap.set(myReloadable, myReloadable.reload());
+      expect(reloadAll(myReloadable, visitedMap)).resolves.toStrictEqual(
+        'first value'
+      );
+    });
   });
 
   describe('safeLoad function', () => {
