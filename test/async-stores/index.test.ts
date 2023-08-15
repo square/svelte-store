@@ -271,13 +271,7 @@ describe('asyncWritable', () => {
         };
 
         const myParent = writable();
-        const { store: myStore, state: myState } = asyncDerived(
-          myParent,
-          load,
-          {
-            trackState: true,
-          }
-        );
+        const { store: myStore, state: myState } = asyncDerived(myParent, load);
 
         let setIncorrectly = false;
         myStore.subscribe((value) => {
@@ -393,6 +387,31 @@ describe('asyncWritable', () => {
         expect(get(myStore)).toBe('b');
         expect(setIncorrectly).toBe(false);
         expect(get(myState).isLoaded).toBe(true);
+      });
+
+      it('resolves initial load if reloaded during', async () => {
+        const getFinalValue = vi
+          .fn()
+          .mockReturnValueOnce('first')
+          .mockReturnValueOnce('second');
+
+        const load = () => {
+          const valueToReturn = getFinalValue();
+          console.log('valueToReturn', valueToReturn);
+          return new Promise<string>((resolve) =>
+            setTimeout(() => resolve(valueToReturn), 100)
+          );
+        };
+
+        const myLoadable = asyncReadable('initial', load, {
+          reloadable: true,
+          debug: 'my thing:',
+        });
+
+        expect(myLoadable.load()).resolves.toBe('second');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const finalValue = await myLoadable.reload();
+        expect(finalValue).toBe('second');
       });
 
       it('can be aborted correctly', async () => {

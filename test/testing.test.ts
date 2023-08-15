@@ -15,16 +15,9 @@ import {
 enableStoreTestingMode();
 
 const mockedFetch = vi.fn();
-const { store: myReadable, state: myState } = asyncReadable(
-  'initial',
-  () => mockedFetch(),
-  {
-    debug: 'myReadable:',
-  }
-);
+const myReadable = asyncReadable('initial', () => mockedFetch());
 
 beforeEach(() => {
-  console.log('resetting');
   myReadable.reset();
 });
 
@@ -44,17 +37,16 @@ describe('can be reset for different tests', () => {
   });
 
   it('loads rejection', async () => {
-    console.log('starting failed test');
     myReadable.subscribe(vi.fn());
     mockedFetch.mockRejectedValueOnce('rejected');
     await myReadable.load().catch(() => Promise.resolve());
 
-    // expect(get(myReadable)).toBe('initial');
+    expect(get(myReadable)).toBe('initial');
 
-    // mockedFetch.mockResolvedValueOnce('loaded');
-    // await myReadable.load().catch(() => Promise.resolve());
+    mockedFetch.mockResolvedValueOnce('loaded');
+    await myReadable.load().catch(() => Promise.resolve());
 
-    // expect(get(myReadable)).toBe('initial');
+    expect(get(myReadable)).toBe('initial');
   });
 });
 
