@@ -1,15 +1,12 @@
 import {
   get,
   type Updater,
-  type Readable,
   writable,
   StartStopNotifier,
-  readable,
   Writable,
 } from 'svelte/store';
 import type {
   AsyncStoreOptions,
-  Loadable,
   LoadState,
   State,
   Stores,
@@ -19,7 +16,6 @@ import type {
   AsyncLoadable,
 } from './types.js';
 import {
-  anyReloadable,
   getStoresArray,
   reloadAll,
   loadAll,
