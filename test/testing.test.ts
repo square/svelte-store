@@ -37,7 +37,7 @@ describe('can be reset for different tests', () => {
   });
 
   it('loads rejection', async () => {
-    myReadable.subscribe(vi.fn());
+    const unsubscribe = myReadable.subscribe(vi.fn());
     mockedFetch.mockRejectedValueOnce('rejected');
     await myReadable.load().catch(() => Promise.resolve());
 
@@ -47,6 +47,7 @@ describe('can be reset for different tests', () => {
     await myReadable.load().catch(() => Promise.resolve());
 
     expect(get(myReadable)).toBe('initial');
+    unsubscribe();
   });
 });
 

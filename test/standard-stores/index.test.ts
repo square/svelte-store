@@ -227,7 +227,6 @@ describe('readable/writable stores', () => {
       expect(stop).toHaveBeenCalledTimes(1);
 
       await myReadable.load();
-      await new Promise((resolve) => setTimeout(resolve));
       expect(stop).toHaveBeenCalledTimes(2);
     });
   });
