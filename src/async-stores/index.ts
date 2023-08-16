@@ -236,10 +236,11 @@ export const asyncWritable = <S extends Stores, T>(
   // required properties
   const subscribe = thisStore.subscribe;
 
-  const load = () => {
+  const load = async () => {
     const dummyUnsubscribe = thisStore.subscribe(() => {
       /* no-op */
     });
+    await loadAll(stores);
     return getLoadedValueOrThrow(dummyUnsubscribe);
   };
 
