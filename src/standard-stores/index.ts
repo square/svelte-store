@@ -9,7 +9,7 @@ import {
   type Writable,
   writable as vanillaWritable,
 } from 'svelte/store';
-import { anyReloadable, loadAll, reloadAll } from '../utils/index.js';
+import { loadAll, reloadAll } from '../utils/index.js';
 import type {
   Loadable,
   Reloadable,
@@ -132,14 +132,28 @@ export const writable = <T>(
     loadPromise = Promise.resolve(value);
   };
 
-  const startFunction: StartStopNotifier<T> = (set: Subscriber<T>) => {
+  const startFunction: StartStopNotifier<T> = (
+    set: Subscriber<T>,
+    update: (fn: Updater<T>) => void
+  ) => {
     const customSet = (value: T) => {
       set(value);
       updateLoadPromise(value);
     };
+
+    const customUpdate = (evaluate: Updater<T>) => {
+      let newValue: T;
+      const customEvaluate: Updater<T> = (value: T) => {
+        newValue = evaluate(value);
+        return newValue;
+      };
+      update(customEvaluate);
+      updateLoadPromise(newValue);
+    };
+
     // intercept the `set` function being passed to the provided start function
     // instead provide our own `set` which also updates the load promise.
-    return start(customSet);
+    return start(customSet, customUpdate);
   };
 
   const thisStore = vanillaWritable(value, start && startFunction);
