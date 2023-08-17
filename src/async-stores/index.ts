@@ -177,14 +177,12 @@ export const asyncWritable = <S extends Stores, T>(
       store.subscribe(onSubscriptionUpdate)
     );
 
-    cleanupSubscriptions = () => {
+    // called on losing last subscriber
+    return () => {
       parentUnsubscribers.map((unsubscriber) => unsubscriber());
       ready = false;
       changeReceived = false;
     };
-
-    // called on losing last subscriber
-    return cleanupSubscriptions;
   };
 
   thisStore = writable(initial, onFirstSubscription);
