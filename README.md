@@ -164,7 +164,7 @@ Some niche features of asyncWritable stores allow for more specific error handli
 
 ### readable/writable
 
-Similarly to derived stores, addtional load functionality is bundled with readable and writable stores. Both readable and writable stores include a `.load()` function that will resolve when the value of the store is first set. If an initial value is provided when creating the store, this means the store will load immeadietly. However, if a value is not provided (left `undefined`) then the store will only load after it is set to a value. This makes it easy to wait on user input, an event listener, etc. in your application.
+Similarly to derived stores, addtional load functionality is bundled with readable and writable stores. Both readable and writable stores include a `.load()` function that will resolve when the value of the store is first set. If an initial value is provided when creating the store, this means the store will load immediately. However, if a value is not provided (left `undefined`) then the store will only load after it is set to a value. This makes it easy to wait on user input, an event listener, etc. in your application.
 
 *It's easy to wait for user input...*
 
