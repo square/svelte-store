@@ -16,6 +16,7 @@ import {
   loadAll,
 } from '../utils/index.js';
 import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
+import { StartStopNotifier } from '../index.js';
 
 // STORES
 
@@ -58,6 +59,7 @@ const getErrorLoadState = (error: unknown): LoadState => {
  * @param mappingWriteFunction A function that takes in the new value of the store and uses it to perform async behavior.
  * Typically this would be to persist the change. If this value resolves to a value the store will be set to it.
  * @param options Modifiers for store behavior.
+ * @param start Start stop notifier.
  * @returns A Loadable store whose value is set to the resolution of provided async behavior.
  * The loaded value of the store will be ready after awaiting the load function of this store.
  */
@@ -69,7 +71,8 @@ export const asyncWritable = <S extends Stores, T>(
     parentValues?: StoresValues<S>,
     oldValue?: T
   ) => Promise<void | T>,
-  options: AsyncStoreOptions<T> = {}
+  options: AsyncStoreOptions<T> = {},
+  start: StartStopNotifier<T> = undefined
 ): WritableLoadable<T> => {
   flagStoreCreated();
   const { reloadable, trackState, initial } = options;
@@ -112,7 +115,7 @@ export const asyncWritable = <S extends Stores, T>(
     forceReload?: boolean
   ) => Promise<T>;
 
-  const thisStore = writable(initial, () => {
+  const thisStore = writable(initial, (set, update) => {
     loadDependenciesThenSet(loadAll).catch(() => Promise.resolve());
 
     const parentUnsubscribers = getStoresArray(stores).map((store) =>
@@ -121,7 +124,9 @@ export const asyncWritable = <S extends Stores, T>(
       })
     );
 
+    const callback = start && start(set, update);
     return () => {
+      callback && callback();
       parentUnsubscribers.map((unsubscriber) => unsubscriber());
     };
   });
