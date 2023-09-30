@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["node", "jest"],
+    "types": ["jest"],
     "declaration": true,
     "outDir": "./lib",
     "sourceMap": true,

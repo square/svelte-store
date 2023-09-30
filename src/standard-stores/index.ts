@@ -133,14 +133,20 @@ export const writable = <T>(
     loadPromise = Promise.resolve(value);
   };
 
-  const startFunction: StartStopNotifier<T> = (set: Subscriber<T>) => {
+  const startFunction: StartStopNotifier<T> = (
+    set: Subscriber<T>,
+    update: (fn: Updater<T>) => void
+  ) => {
     const customSet = (value: T) => {
       set(value);
       updateLoadPromise(value);
     };
+    const customUpdate = (fn: Updater<T>) => {
+      update(fn);
+    };
     // intercept the `set` function being passed to the provided start function
     // instead provide our own `set` which also updates the load promise.
-    return start(customSet);
+    return start(customSet, customUpdate);
   };
 
   const thisStore = vanillaWritable(value, start && startFunction);
