@@ -1,0 +1,9 @@
+export declare const getLocalStorageItem: (key: string) => unknown;
+export declare const setLocalStorageItem: (key: string, value: unknown) => void;
+export declare const removeLocalStorageItem: (key: string) => void;
+export declare const getSessionStorageItem: (key: string) => string | null;
+export declare const setSessionStorageItem: (key: string, value: unknown) => void;
+export declare const removeSessionStorageItem: (key: string) => void;
+export declare const getCookie: (key: string) => unknown;
+export declare const setCookie: (key: string, value: unknown) => void;
+export declare const removeCookie: (key: string) => void;
