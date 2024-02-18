@@ -1,4 +1,4 @@
-import { get } from 'svelte/store';
+import { get, readable as vanillaReadable } from 'svelte/store';
 import {
   asyncReadable,
   Loadable,
@@ -6,6 +6,7 @@ import {
   readable,
   writable,
 } from '../../src';
+import { delayValue } from '../helpers';
 
 describe('synchronous derived', () => {
   const nonAsyncParent = writable('writable');
@@ -206,8 +207,23 @@ describe('readable/writable stores', () => {
         }, 50);
       });
 
-      const $myReadable = await myReadable.load();
-      expect($myReadable).toBe('value');
+      expect(await myReadable.load()).toBe('value');
+    });
+
+    it('properly updates from start function', async () => {
+      const myReadable = readable(0, (_, update) => {
+        setTimeout(() => {
+          update((value) => value + 1);
+        }, 50);
+        setTimeout(() => {
+          update((value) => value + 1);
+        }, 100);
+      });
+
+      myReadable.subscribe(vi.fn());
+      await delayValue(null, 200);
+      expect(get(myReadable)).toBe(2);
+      expect(await myReadable.load()).toBe(2);
     });
 
     it('runs stop callback after loading with no subscriptions', async () => {
@@ -227,7 +243,6 @@ describe('readable/writable stores', () => {
       expect(stop).toHaveBeenCalledTimes(1);
 
       await myReadable.load();
-      await new Promise((resolve) => setTimeout(resolve));
       expect(stop).toHaveBeenCalledTimes(2);
     });
   });

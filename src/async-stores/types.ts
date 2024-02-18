@@ -16,14 +16,19 @@ export type VisitedMap = WeakMap<Readable<unknown>, Promise<unknown>>;
 
 export interface Loadable<T> extends Readable<T> {
   load(): Promise<T>;
-  reload?(visitedMap?: VisitedMap): Promise<T>;
-  state?: Readable<LoadState>;
   reset?(): void;
   store: Loadable<T>;
 }
 
-export interface Reloadable<T> extends Loadable<T> {
+export interface Reloadable<T> {
   reload(visitedMap?: VisitedMap): Promise<T>;
+}
+
+export interface AsyncLoadable<T> extends Loadable<T> {
+  reload(visitedMap?: VisitedMap): Promise<T>;
+  abort(): void;
+  state: Readable<LoadState>;
+  store: AsyncLoadable<T>;
 }
 
 export interface AsyncWritable<T> extends Writable<T> {
@@ -32,12 +37,13 @@ export interface AsyncWritable<T> extends Writable<T> {
   store: AsyncWritable<T>;
 }
 
-export type WritableLoadable<T> = Loadable<T> & AsyncWritable<T>;
+export type WritableLoadable<T> = AsyncLoadable<T> & AsyncWritable<T>;
 
 export interface AsyncStoreOptions<T> {
   reloadable?: true;
   trackState?: true;
   initial?: T;
+  rebounceDelay?: number;
 }
 export declare type StoresArray =
   | [Readable<unknown>, ...Array<Readable<unknown>>]

@@ -9,9 +9,10 @@ import {
   type Writable,
   writable as vanillaWritable,
 } from 'svelte/store';
-import { anyReloadable, loadAll, reloadAll } from '../utils/index.js';
+import { loadAll, reloadAll } from '../utils/index.js';
 import type {
   Loadable,
+  Reloadable,
   Stores,
   StoresValues,
   VisitedMap,
@@ -58,7 +59,7 @@ export function derived<S extends Stores, T>(
   stores: S,
   fn: SubscribeMapper<S, T>,
   initialValue?: T
-): Loadable<T>;
+): Loadable<T> & Reloadable<T>;
 
 /**
  * A Derived store that is considered 'loaded' when all of its parents have loaded (and so on).
@@ -73,25 +74,23 @@ export function derived<S extends Stores, T>(
   stores: S,
   mappingFunction: DerivedMapper<S, T>,
   initialValue?: T
-): Loadable<T>;
+): Loadable<T> & Reloadable<T>;
 
 // eslint-disable-next-line func-style
 export function derived<S extends Stores, T>(
   stores: S,
   fn: DerivedMapper<S, T> | SubscribeMapper<S, T>,
   initialValue?: T
-): Loadable<T> {
+): Loadable<T> & Reloadable<T> {
   flagStoreCreated();
 
   const thisStore = vanillaDerived(stores, fn as any, initialValue);
   const load = () => loadDependencies(thisStore, loadAll, stores);
-  const reload = anyReloadable(stores)
-    ? (visitedMap?: VisitedMap) => {
-        const visitMap = visitedMap ?? new WeakMap();
-        const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
-        return loadDependencies(thisStore, reloadAndTrackVisits, stores);
-      }
-    : undefined;
+  const reload = (visitedMap?: VisitedMap) => {
+    const visitMap = visitedMap ?? new WeakMap();
+    const reloadAndTrackVisits = (stores: S) => reloadAll(stores, visitMap);
+    return loadDependencies(thisStore, reloadAndTrackVisits, stores);
+  };
 
   return {
     get store() {
@@ -99,7 +98,7 @@ export function derived<S extends Stores, T>(
     },
     ...thisStore,
     load,
-    ...(reload && { reload }),
+    reload,
   };
 }
 
@@ -133,14 +132,28 @@ export const writable = <T>(
     loadPromise = Promise.resolve(value);
   };
 
-  const startFunction: StartStopNotifier<T> = (set: Subscriber<T>) => {
+  const startFunction: StartStopNotifier<T> = (
+    set: Subscriber<T>,
+    update: (fn: Updater<T>) => void
+  ) => {
     const customSet = (value: T) => {
       set(value);
       updateLoadPromise(value);
     };
+
+    const customUpdate = (evaluate: Updater<T>) => {
+      let newValue: T;
+      const customEvaluate: Updater<T> = (value: T) => {
+        newValue = evaluate(value);
+        return newValue;
+      };
+      update(customEvaluate);
+      updateLoadPromise(newValue);
+    };
+
     // intercept the `set` function being passed to the provided start function
     // instead provide our own `set` which also updates the load promise.
-    return start(customSet);
+    return start(customSet, customUpdate);
   };
 
   const thisStore = vanillaWritable(value, start && startFunction);

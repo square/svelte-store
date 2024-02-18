@@ -9,10 +9,9 @@ import {
   derived,
   readable,
   writable,
-  isReloadable,
-  rebounce,
   safeLoad,
 } from '../../src';
+import { delayValue, delayFunction } from '../helpers';
 
 describe('asyncWritable', () => {
   const writableParent = writable('writable');
@@ -60,12 +59,14 @@ describe('asyncWritable', () => {
       expect(get(isInitial)).toBe(true);
     });
 
-    it('does not reload if not reloadable', () => {
+    it('does not reload if not reloadable', async () => {
       const myAsyncDerived = asyncReadable(undefined, mockReload);
       myAsyncDerived.subscribe(vi.fn());
 
-      expect(myAsyncDerived.load()).resolves.toBe('first value');
-      expect(isReloadable(myAsyncDerived)).toBeFalsy();
+      let result = await myAsyncDerived.load();
+      expect(result).toBe('first value');
+      result = await myAsyncDerived.reload();
+      expect(result).toBe('first value');
     });
 
     it('does reload if reloadable', async () => {
@@ -100,6 +101,7 @@ describe('asyncWritable', () => {
         () => Promise.reject(new Error('error')),
         { initial: 'initial' }
       );
+
       myAsyncDerived.subscribe(vi.fn());
 
       expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
@@ -107,12 +109,14 @@ describe('asyncWritable', () => {
       expect(get(myAsyncDerived)).toBe('initial');
     });
 
-    it('does not reload if not reloadable', () => {
+    it('does not reload if not reloadable', async () => {
       const myAsyncDerived = asyncDerived(writableParent, mockReload);
       myAsyncDerived.subscribe(vi.fn());
 
-      expect(myAsyncDerived.load()).resolves.toBe('first value');
-      expect(isReloadable(myAsyncDerived)).toBeFalsy();
+      let result = await myAsyncDerived.load();
+      expect(result).toBe('first value');
+      result = await myAsyncDerived.reload();
+      expect(result).toBe('first value');
     });
 
     it('does reload if reloadable', async () => {
@@ -139,15 +143,17 @@ describe('asyncWritable', () => {
       expect(get(myAsyncDerived)).toBe('second value');
     });
 
-    it('loads asyncReadable parent', () => {
+    it('loads asyncReadable parent', async () => {
       const asyncReadableParent = asyncReadable(undefined, mockReload);
       const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
         Promise.resolve(`derived from ${storeValue}`)
       );
       myAsyncDerived.subscribe(vi.fn());
 
-      expect(myAsyncDerived.load()).resolves.toBe('derived from first value');
-      expect(isReloadable(myAsyncDerived)).toBeFalsy();
+      let result = await myAsyncDerived.load();
+      expect(result).toBe('derived from first value');
+      result = await myAsyncDerived.reload();
+      expect(result).toBe('derived from first value');
     });
 
     it('reloads reloadable parent', async () => {
@@ -184,19 +190,25 @@ describe('asyncWritable', () => {
       expect(mockReload).toHaveBeenCalledTimes(2);
     });
 
-    it('rejects load when parent load fails', () => {
-      const asyncReadableParent = asyncReadable(undefined, () =>
-        Promise.reject(new Error('error'))
+    it('rejects load and reload when parent load fails', () => {
+      const asyncReadableParent = asyncReadable(
+        undefined,
+        () => Promise.reject(new Error('error')),
+        { reloadable: true }
       );
+      expect(asyncReadableParent.load()).rejects.toStrictEqual(
+        new Error('error')
+      );
+
       const myAsyncDerived = asyncDerived(asyncReadableParent, (storeValue) =>
         Promise.resolve(`derived from ${storeValue}`)
       );
-      myAsyncDerived.subscribe(vi.fn());
 
       expect(myAsyncDerived.load()).rejects.toStrictEqual(new Error('error'));
+      expect(myAsyncDerived.reload()).rejects.toStrictEqual(new Error('error'));
     });
 
-    it('correcly unsubscribes from parents', async () => {
+    it('correctly unsubscribes from parents', async () => {
       const writableParent = writable('initial');
       const firstDerivedLoad = vi.fn(($parent) =>
         Promise.resolve(`${$parent} first`)
@@ -216,7 +228,7 @@ describe('asyncWritable', () => {
 
       // this sucks but I can't figure out a better way to wait for the
       // subscribe callbacks to get called without generating a new subscription
-      await new Promise((resolve) => setTimeout(resolve));
+      await delayValue(null, 100);
 
       expect(firstValue).toBe('initial first');
       expect(secondValue).toBe('initial second');
@@ -226,7 +238,7 @@ describe('asyncWritable', () => {
       firstUnsubscribe();
       writableParent.set('updated');
 
-      await new Promise((resolve) => setTimeout(resolve));
+      await delayValue(null, 50);
 
       expect(firstValue).toBe('initial first');
       expect(secondValue).toBe('updated second');
@@ -236,19 +248,57 @@ describe('asyncWritable', () => {
 
     describe('abort/rebounce integration', () => {
       it('loads to rebounced value only', async () => {
+        const load = (value: string) => delayValue(value, 100);
+
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(myParent, load);
+
+        let setIncorrectly = false;
+        myStore.subscribe((value) => {
+          if (['a', 'b'].includes(value)) {
+            setIncorrectly = true;
+          }
+        });
+
+        let everErrored = false;
+        myState.subscribe((state) => {
+          if (state.isError) {
+            everErrored = true;
+          }
+        });
+
+        myParent.set('a');
+        await delayValue(null, 50);
+        expect(get(myState).isLoading).toBe(true);
+
+        myParent.set('b');
+        await delayValue(null, 50);
+        expect(get(myState).isLoading).toBe(true);
+
+        myParent.set('c');
+        await delayValue(null, 50);
+        expect(get(myState).isLoading).toBe(true);
+
+        const finalValue = await myStore.load();
+        expect(everErrored).toBe(false);
+        expect(setIncorrectly).toBe(false);
+        expect(finalValue).toBe('c');
+        expect(get(myStore)).toBe('c');
+        expect(get(myState).isLoaded).toBe(true);
+      });
+
+      it('uses rebounce delay', async () => {
         const load = (value: string) => {
-          return new Promise<string>((resolve) =>
-            setTimeout(() => resolve(value), 100)
-          );
+          return Promise.resolve(value);
         };
 
-        const rebouncedLoad = rebounce(load);
         const myParent = writable();
         const { store: myStore, state: myState } = asyncDerived(
           myParent,
-          rebouncedLoad,
+          load,
           {
             trackState: true,
+            rebounceDelay: 100,
           }
         );
 
@@ -267,17 +317,18 @@ describe('asyncWritable', () => {
         });
 
         myParent.set('a');
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await delayValue(null, 50);
         expect(get(myState).isLoading).toBe(true);
+
         myParent.set('b');
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await delayValue(null, 50);
         expect(get(myState).isLoading).toBe(true);
+
         myParent.set('c');
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await delayValue(null, 50);
         expect(get(myState).isLoading).toBe(true);
 
         const finalValue = await myStore.load();
-
         expect(everErrored).toBe(false);
         expect(setIncorrectly).toBe(false);
         expect(finalValue).toBe('c');
@@ -285,51 +336,81 @@ describe('asyncWritable', () => {
         expect(get(myState).isLoaded).toBe(true);
       });
 
-      it('can be cleared correctly', async () => {
+      it('loads last called value instead of last resolved', async () => {
+        let timesCalled = 0;
         const load = (value: string) => {
-          return new Promise<string>((resolve) =>
-            setTimeout(() => resolve(value), 100)
-          );
+          timesCalled += 1;
+          return delayValue(value, 200 - timesCalled * 100);
         };
 
-        const rebouncedLoad = rebounce(load);
         const myParent = writable();
         const { store: myStore, state: myState } = asyncDerived(
           myParent,
-          rebouncedLoad,
+          load,
           {
             trackState: true,
           }
         );
 
-        myStore.subscribe(vi.fn());
+        let setIncorrectly = false;
+        myStore.subscribe((value) => {
+          if (['a'].includes(value)) {
+            setIncorrectly = true;
+          }
+        });
 
+        myParent.set('a');
+        myParent.set('b');
+
+        const result = await myStore.load();
+        expect(result).toBe('b');
+
+        await delayValue(null, 200);
+        expect(get(myStore)).toBe('b');
+        expect(setIncorrectly).toBe(false);
+        expect(get(myState).isLoaded).toBe(true);
+      });
+
+      it('resolves initial load if reloaded during', async () => {
+        const getFinalValue = vi
+          .fn()
+          .mockReturnValueOnce('first')
+          .mockReturnValueOnce('second');
+
+        const myLoadable = asyncReadable(
+          'initial',
+          delayFunction(getFinalValue, 100),
+          {
+            reloadable: true,
+          }
+        );
+
+        expect(myLoadable.load()).resolves.toBe('second');
+        await delayValue(null, 50);
+        const finalValue = await myLoadable.reload();
+        expect(finalValue).toBe('second');
+      });
+
+      it('can be aborted correctly', async () => {
+        const myParent = writable();
+        const { store: myStore, state: myState } = asyncDerived(
+          myParent,
+          delayFunction((value) => value, 100)
+        );
+
+        myStore.subscribe(vi.fn());
         myParent.set('one');
         let loadValue = await myStore.load();
         expect(loadValue).toBe('one');
 
         myParent.set('two');
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        rebouncedLoad.clear();
-        loadValue = await myStore.load();
+        await delayValue(null, 50);
+        myStore.abort();
 
+        loadValue = await myStore.load();
         expect(loadValue).toBe('one');
         expect(get(myStore)).toBe('one');
         expect(get(myState).isLoaded).toBe(true);
-      });
-
-      it('rejects load when rebounce reject', () => {
-        const rebouncedReject = rebounce(
-          () => Promise.reject(new Error('error')),
-          100
-        );
-        const parent = writable();
-        const rejectStore = asyncDerived(parent, () => rebouncedReject());
-
-        parent.set('value');
-        expect(() => rejectStore.load()).rejects.toStrictEqual(
-          new Error('error')
-        );
       });
     });
   });
@@ -355,6 +436,7 @@ describe('asyncWritable', () => {
       expect(get(myAsyncDerived)).toBe(
         'derived from writable, loadable, first value'
       );
+
       writableParent.set('new value');
       await myAsyncDerived.load();
       expect(get(myAsyncDerived)).toBe(
@@ -369,12 +451,20 @@ describe('asyncWritable', () => {
     it('deterministically sets final value when receiving updates while loading', async () => {
       const delayedParent = asyncReadable(
         undefined,
-        () => new Promise((resolve) => setTimeout(resolve, 1000))
+        delayFunction(() => null, 100)
       );
+      const mockLoad = vi
+        .fn()
+        .mockReturnValue('default')
+        .mockResolvedValueOnce('first value')
+        .mockResolvedValueOnce('second value');
+
       const myDerived = asyncDerived(
         [writableParent, delayedParent],
-        ([$writableParent, $delayedParent]) =>
-          mockReload().then((response) => `${$writableParent}: ${response}`)
+        async ([$writableParent, $delayedParent]) => {
+          const reloadValue = await mockLoad();
+          return `${$writableParent}: ${reloadValue}`;
+        }
       );
       myDerived.subscribe(vi.fn());
       writableParent.set('A');
@@ -391,6 +481,46 @@ describe('asyncWritable', () => {
       writableParent.set('L');
       await myDerived.load();
       expect(get(myDerived)).toBe('L: first value');
+    });
+
+    it('updates once during concurrent changes', async () => {
+      const grandParentLoad = vi
+        .fn()
+        .mockResolvedValueOnce('first')
+        .mockResolvedValueOnce('second')
+        .mockResolvedValueOnce('third');
+
+      const grandParent = asyncReadable(undefined, grandParentLoad, {
+        reloadable: true,
+      });
+      const parentA = derived(grandParent, (value) => value);
+      const parentB = asyncDerived(
+        grandParent,
+        delayFunction((value) => value.toUpperCase(), 100)
+      );
+      const parentC = asyncDerived(
+        parentB,
+        delayFunction((value) => value, 100)
+      );
+
+      const load = vi.fn(
+        delayFunction(([valueA, valueB]) => valueA + valueB, 100)
+      );
+      const myLoadable = asyncDerived([parentA, parentC], load);
+      myLoadable.subscribe(vi.fn());
+
+      let result = await myLoadable.load();
+      expect(result).toBe('firstFIRST');
+      expect(load).toHaveBeenCalledOnce();
+
+      result = await myLoadable.reload();
+      expect(result).toBe('secondSECOND');
+      expect(load).toHaveBeenCalledTimes(2);
+
+      await grandParent.reload();
+      result = await myLoadable.load();
+      expect(result).toBe('thirdTHIRD');
+      expect(load).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -595,14 +725,14 @@ describe('asyncWritable', () => {
       expect(mappingWriteFunction).toHaveBeenCalledTimes(1);
     });
 
-    it('does not reload if not reloadable', () => {
+    it('does not reload if not reloadable', async () => {
       const myAsyncWritable = asyncWritable(writableParent, mockReload, () =>
         Promise.resolve()
       );
       myAsyncWritable.subscribe(vi.fn());
 
-      expect(myAsyncWritable.load()).resolves.toBe('first value');
-      expect(isReloadable(myAsyncWritable)).toBeFalsy();
+      expect(await myAsyncWritable.load()).toBe('first value');
+      expect(await myAsyncWritable.reload()).toBe('first value');
     });
 
     it('does reload if reloadable', async () => {
@@ -634,7 +764,7 @@ describe('asyncWritable', () => {
       expect(get(myAsyncWritable)).toBe('second value');
     });
 
-    it('loads asyncReadable parent', () => {
+    it('loads asyncReadable parent', async () => {
       const asyncReadableParent = asyncReadable(undefined, mockReload);
       const myAsyncWritable = asyncWritable(
         asyncReadableParent,
@@ -643,8 +773,8 @@ describe('asyncWritable', () => {
       );
       myAsyncWritable.subscribe(vi.fn());
 
-      expect(myAsyncWritable.load()).resolves.toBe('derived from first value');
-      expect(isReloadable(myAsyncWritable)).toBeFalsy();
+      expect(await myAsyncWritable.load()).toBe('derived from first value');
+      expect(await myAsyncWritable.reload()).toBe('derived from first value');
     });
 
     it('can access asyncReadable parent loaded value while writing', async () => {
@@ -709,13 +839,13 @@ describe('asyncWritable', () => {
       expect(get(myAsyncWritable)).toBe('derived from first value');
       await myAsyncWritable.reload();
       expect(get(myAsyncWritable)).toBe('derived from second value');
-      expect(myAsyncWritable.load()).resolves.toBe('derived from second value');
+      expect(await myAsyncWritable.load()).toBe('derived from second value');
 
       await myAsyncWritable.set('set value');
       expect(get(myAsyncWritable)).toBe('set value');
     });
 
-    it('rejects load when parent load fails', () => {
+    it('rejects load when parent load fails', async () => {
       const asyncReadableParent = asyncReadable(undefined, () =>
         Promise.reject(new Error('error'))
       );
@@ -727,6 +857,7 @@ describe('asyncWritable', () => {
       myAsyncWritable.subscribe(vi.fn());
 
       expect(myAsyncWritable.load()).rejects.toStrictEqual(new Error('error'));
+      await safeLoad(myAsyncWritable);
     });
   });
 
@@ -754,6 +885,8 @@ describe('asyncWritable', () => {
       const myReadable = asyncReadable(undefined, () =>
         Promise.reject(new Error('error'))
       );
+
+      myReadable.subscribe(vi.fn());
 
       // perform multiple loads and make sure logger only called once
       await safeLoad(myReadable);
@@ -859,7 +992,7 @@ describe('trackState', () => {
     });
   });
 
-  describe('adds state store when trackState enabled', () => {
+  describe('adds state store', () => {
     it('works with asyncWritable', async () => {
       const { store: myStore, state: myState } = asyncWritable(
         [],
@@ -871,9 +1004,7 @@ describe('trackState', () => {
       expect(get(myStore)).toBe('initial');
       expect(get(myState).isLoading).toBe(true);
 
-      await myStore.load();
-
-      expect(get(myStore)).toBe('loaded value');
+      expect(await myStore.load()).toBe('loaded value');
       expect(get(myState).isLoaded).toBe(true);
     });
 
@@ -887,9 +1018,7 @@ describe('trackState', () => {
       expect(get(myStore)).toBe('initial');
       expect(get(myState).isLoading).toBe(true);
 
-      await myStore.load();
-
-      expect(get(myStore)).toBe('loaded value');
+      expect(await myStore.load()).toBe('loaded value');
       expect(get(myState).isLoaded).toBe(true);
     });
 
@@ -903,9 +1032,7 @@ describe('trackState', () => {
       expect(get(myStore)).toBe('initial');
       expect(get(myState).isLoading).toBe(true);
 
-      await myStore.load();
-
-      expect(get(myStore)).toBe('loaded value');
+      expect(await myStore.load()).toBe('loaded value');
       expect(get(myState).isLoaded).toBe(true);
     });
   });
@@ -947,6 +1074,8 @@ describe('trackState', () => {
         { trackState: true }
       );
 
+      myStore.subscribe(vi.fn());
+
       expect(get(myState).isLoading).toBe(true);
 
       await myStore.load();
@@ -976,6 +1105,8 @@ describe('trackState', () => {
         { trackState: true }
       );
 
+      myStore.subscribe(vi.fn());
+
       expect(get(myState).isLoading).toBe(true);
 
       await myStore.load();
@@ -998,10 +1129,7 @@ describe('trackState', () => {
       const myParent = writable('initial');
       const { store: myStore, state: myState } = asyncDerived(
         myParent,
-        ($myParent) =>
-          new Promise((resolve) =>
-            setTimeout(() => resolve(`derived from ${$myParent}`), 50)
-          ),
+        delayFunction(($myParent) => `derived from ${$myParent}`, 50),
         { trackState: true }
       );
 
@@ -1015,7 +1143,6 @@ describe('trackState', () => {
       expect(get(myState).isLoaded).toBe(true);
 
       myParent.set('updated');
-      await new Promise((resolve) => setTimeout(resolve));
 
       expect(get(myStore)).toBe('derived from initial');
       expect(get(myState).isReloading).toBe(true);
@@ -1038,15 +1165,11 @@ describe('trackState', () => {
       );
       const { store: myStore, state: myState } = asyncDerived(
         [parentA, parentB],
-        ([$parentA, $parentB]) => {
-          return new Promise((resolve) => {
-            setTimeout(() => {
-              resolve(`${$parentA} ${$parentB}`);
-            }, 100);
-          });
-        },
+        delayFunction(([$parentA, $parentB]) => `${$parentA} ${$parentB}`, 100),
         { trackState: true }
       );
+
+      myStore.subscribe(vi.fn());
 
       expect(get(myState).isLoading).toBe(true);
 
@@ -1056,7 +1179,6 @@ describe('trackState', () => {
       expect(get(myState).isLoaded).toBe(true);
 
       grandParent.set('updated');
-      await new Promise((resolve) => setTimeout(resolve));
 
       expect(get(myStore)).toBe('initialA initialB');
       expect(get(myState).isReloading).toBe(true);
@@ -1092,6 +1214,9 @@ describe('trackState', () => {
         load,
         { trackState: true, reloadable: true }
       );
+
+      myStore.subscribe(vitest.fn());
+
       expect(get(myState).isLoading).toBe(true);
 
       await safeLoad(myStore);
@@ -1116,6 +1241,8 @@ describe('trackState', () => {
         ($myParent) => Promise.resolve(`derived from ${$myParent}`),
         { trackState: true }
       );
+
+      myStore.subscribe(vi.fn());
 
       expect(get(myState).isLoading).toBe(true);
 

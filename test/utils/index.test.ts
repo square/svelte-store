@@ -1,13 +1,13 @@
 import {
   asyncReadable,
   Loadable,
-  readable,
   loadAll,
   rebounce,
   reloadAll,
   safeLoad,
   enableStoreTestingMode,
 } from '../../src';
+import { delayValue } from '../helpers';
 
 enableStoreTestingMode();
 
@@ -20,7 +20,7 @@ describe('loadAll / reloadAll utils', () => {
   const badLoadable = {
     load: () => Promise.reject(new Error('E')),
     reload: () => Promise.reject(new Error('F')),
-  } as Loadable<string>;
+  } as unknown as Loadable<string>;
 
   beforeEach(() => {
     mockReload
@@ -112,13 +112,8 @@ describe('rebounce', () => {
 
   const toUpperCase = (input: string) => input.toUpperCase();
 
-  const asyncToUpperCase = (input: string) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(input.toUpperCase());
-      }, interval());
-    });
-  };
+  const asyncToUpperCase = (input: string) =>
+    delayValue(input.toUpperCase(), interval());
 
   it('works with no timer or rejects', () => {
     const rebouncedToUpperCase = rebounce(asyncToUpperCase);
@@ -167,6 +162,6 @@ describe('rebounce', () => {
     const rebouncedToUpperCase = rebounce(toUpperCase, 100);
 
     expect(rebouncedToUpperCase('a string')).rejects.toStrictEqual(abortError);
-    rebouncedToUpperCase.clear();
+    rebouncedToUpperCase.abort();
   });
 });

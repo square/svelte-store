@@ -23,6 +23,7 @@ beforeEach(() => {
 
 describe('can be reset for different tests', () => {
   it('loads resolution', async () => {
+    const unsubscribe = myReadable.subscribe(vi.fn());
     mockedFetch.mockResolvedValueOnce('loaded');
     await myReadable.load();
 
@@ -32,9 +33,11 @@ describe('can be reset for different tests', () => {
     await myReadable.load();
 
     expect(get(myReadable)).toBe('loaded');
+    unsubscribe();
   });
 
   it('loads rejection', async () => {
+    const unsubscribe = myReadable.subscribe(vi.fn());
     mockedFetch.mockRejectedValueOnce('rejected');
     await myReadable.load().catch(() => Promise.resolve());
 
@@ -44,6 +47,7 @@ describe('can be reset for different tests', () => {
     await myReadable.load().catch(() => Promise.resolve());
 
     expect(get(myReadable)).toBe('initial');
+    unsubscribe();
   });
 });
 
