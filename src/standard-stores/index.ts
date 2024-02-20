@@ -140,7 +140,7 @@ export const writable = <T>(
     };
     // intercept the `set` function being passed to the provided start function
     // instead provide our own `set` which also updates the load promise.
-    return start(customSet);
+    return start(customSet, null);
   };
 
   const thisStore = vanillaWritable(value, start && startFunction);
