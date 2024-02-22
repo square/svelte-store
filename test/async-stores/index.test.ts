@@ -681,6 +681,16 @@ describe('asyncWritable', () => {
 
       expect(mappingWriteFunction).toHaveBeenCalledTimes(1);
     });
+
+    it('can be updated from initial value without subscription', async () => {
+      const myAsyncWritable = asyncWritable([], () =>
+        Promise.resolve('initial')
+      );
+
+      await myAsyncWritable.update((value) => `${value}->updated`);
+
+      expect(get(myAsyncWritable)).toBe('initial->updated');
+    });
   });
 
   describe('asyncWritable with parents', () => {

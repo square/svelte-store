@@ -21,6 +21,7 @@ import {
   loadAll,
   rebounce,
   getAll,
+  safeLoad,
 } from '../utils/index.js';
 import { flagStoreCreated, getStoreTestingMode, logError } from '../config.js';
 
@@ -137,8 +138,6 @@ export const asyncWritable = <S extends Stores, T>(
     }
   };
 
-  let cleanupSubscriptions: () => void;
-
   // called when store receives its first subscriber
   const onFirstSubscription: StartStopNotifier<T> = () => {
     setCurrentLoadPromise();
@@ -191,6 +190,9 @@ export const asyncWritable = <S extends Stores, T>(
     updater: Updater<T>,
     persist?: boolean
   ) => {
+    const dummyUnsubscribe = thisStore.subscribe(() => {
+      /* no-op */
+    });
     setState('WRITING');
     let oldValue: T;
     try {
@@ -219,12 +221,14 @@ export const asyncWritable = <S extends Stores, T>(
         logError(error);
         setState('ERROR');
         resolveCurrentLoad(newValue);
+        dummyUnsubscribe();
         throw error;
       }
     }
 
     setState('LOADED');
     resolveCurrentLoad(newValue);
+    dummyUnsubscribe();
   };
 
   // required properties
@@ -234,7 +238,7 @@ export const asyncWritable = <S extends Stores, T>(
     const dummyUnsubscribe = thisStore.subscribe(() => {
       /* no-op */
     });
-    await loadAll(stores);
+    await safeLoad(stores);
     return getLoadedValueOrThrow(dummyUnsubscribe);
   };
 
