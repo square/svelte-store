@@ -1,8 +1,8 @@
 {
   "typescript.tsdk": "node_modules/typescript/lib",
   "editor.codeActionsOnSave": {
-    "source.fixAll": true,
-    "source.fixAll.markdownlint": true
+    "source.fixAll": "explicit",
+    "source.fixAll.markdownlint": "explicit"
   },
   "svelte.plugin.svelte.format.config.singleQuote": true,
   "[svelte]": {
