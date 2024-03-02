@@ -12,6 +12,7 @@ export type {
   LoadState,
   Loadable,
   Reloadable,
+  AsyncLoadable,
   AsyncWritable,
   WritableLoadable,
   AsyncStoreOptions,

@@ -13,8 +13,11 @@ import { get } from 'svelte/store';
  * accessors to the properties of the store's loaded value
  */
 export const asyncClient = <S extends Loadable<unknown>>(
-  loadable: S
+  loadable: S,
+  prereqFn?: () => Promise<void>
 ): S & AsyncClient<StoresValues<S>> => {
+  let prereqPromise;
+
   // Generate an empty function that will be proxied.
   // This lets us invoke the resulting asyncClient.
   // An anonymous function is used instead of the function prototype
@@ -33,7 +36,11 @@ export const asyncClient = <S extends Loadable<unknown>>(
         return loadable[property];
       }
       return async (...argumentsList: unknown[]) => {
+        prereqPromise ??= prereqFn?.();
+        await prereqPromise;
+
         const storeValue = await loadable.load();
+
         const original = storeValue[property];
         if (typeof original === 'function') {
           return Reflect.apply(original, storeValue, argumentsList);
@@ -43,6 +50,9 @@ export const asyncClient = <S extends Loadable<unknown>>(
       };
     },
     apply: async (_, __, argumentsList) => {
+      prereqPromise ??= prereqFn?.();
+      await prereqPromise;
+
       const storeValue = await loadable.load();
       if (typeof storeValue === 'function') {
         return Reflect.apply(storeValue, storeValue, argumentsList);
