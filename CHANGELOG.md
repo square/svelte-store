@@ -1,5 +1,13 @@
 # Changelog #
 
+notes:
+
+- state store now always included
+- all mapping load functions are rebounced by default
+- if an async store loses all subscriptions and then gains one the mapping load function will always evaluate even if the inputs have not changed
+- can't use stores to hold errors
+- rebounce clear is now called abort
+
 ## 1.0.17 (2023-6-20)
 
 - *BREAKING CHANGE* chore: rearrange dependencies to minimize installed package size
@@ -8,7 +16,7 @@
 
 ## 1.0.16 (2023-6-20)
 
-- fix: moduleResoltion: NoodeNext support
+- fix: moduleResoltion: NodeNext support
 - feat: allow for custom storage types for persisted stores
 
 ## 1.0.15 (2023-2-27)
