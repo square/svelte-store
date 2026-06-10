@@ -10,6 +10,10 @@
     "type": "git",
     "url": "https://github.com/square/svelte-store.git"
   },
+  "homepage": "https://github.com/square/svelte-store",
+  "bugs": {
+    "url": "https://github.com/square/svelte-store/issues"
+  },
   "scripts": {
     "build": "yarn cleanup && tsc",
     "prepublishOnly": "yarn build",
