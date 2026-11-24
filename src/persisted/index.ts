@@ -78,7 +78,8 @@ export const configurePersistedConsent = (
  * sessionStorage item, or cookie. The store's value will initialize to the value of
  * the corresponding storage item if found, otherwise it will use the provided initial
  * value and persist that value in storage. Any changes to the value of this store will
- * be persisted in storage.
+ * be persisted in storage. Storage is best-effort: unreadable values use the initial
+ * value, and failed writes or removals do not prevent in-memory updates.
  * @param initial The value to initialize to when used when a corresponding storage
  * item is not found. If a Loadable store is provided the store will be loaded and its value
  * used in this case.
@@ -106,14 +107,23 @@ export const persisted = <T>(
     // check consent if checker provided
     if (!checkConsent || checkConsent(consentLevel)) {
       const storageKey = await getKey();
-      setStorageItem(storageKey, value);
+      try {
+        setStorageItem(storageKey, value);
+      } catch {
+        // Keep the store usable even if persistence is unavailable.
+      }
     }
     set(value);
   };
 
   const synchronize = async (set: Subscriber<T>): Promise<T> => {
     const storageKey = await getKey();
-    const stored = getStorageItem(storageKey);
+    let stored: unknown;
+    try {
+      stored = getStorageItem(storageKey);
+    } catch {
+      // Treat inaccessible storage or invalid JSON as a missing value.
+    }
 
     if (stored) {
       set(stored as T);
@@ -163,7 +173,11 @@ export const persisted = <T>(
 
   const clear = async () => {
     const storageKey = await getKey();
-    removeStorageItem(storageKey);
+    try {
+      removeStorageItem(storageKey);
+    } catch {
+      // Clearing memory must still work when storage cannot be removed.
+    }
     thisStore.set(null);
   };
 
