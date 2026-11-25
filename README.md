@@ -202,7 +202,7 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 
 Sometimes data needs to persist outside the lifecycle of our app. By using persisted stores you can accomplish this while gaining all of the other benefits of Loadable stores. A persisted store synchronizes (stringifiable) store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
 
-Storage is best-effort, including custom storage types. If a read fails or stored JSON is invalid, the store uses the provided initial value in memory and leaves storage untouched. If a write or removal fails, the in-memory change still takes effect. Later operations will try storage again. A failed write or removal can leave an older value in storage, so a later `resync()` or page load may restore it. Consent checks still apply to writes.
+Storage is best-effort for synchronous storage operations, including synchronous custom adapters. If a read fails or stored JSON is invalid, the store uses the provided initial value in memory and leaves storage untouched. If a write or removal fails, the in-memory change still takes effect. Later operations will try storage again. A failed write or removal can leave an older value in storage, so a later `resync()` or page load may restore it. Consent checks still apply to writes.
 
 *We can persist a user name across page loads...*
 
@@ -246,6 +246,8 @@ We are also able to wipe stored data by calling `clear()` on the store. The stor
 #### persisted configuration / custom storage
 
 Persisted stores have three built in storage types: LOCAL_STORAGE, SESSION_STORAGE, and COOKIE. These should be sufficient for most use cases, but have the disadvantage of only being able to store JSON serializable data. If more advanced behavior is required we can define a custom storage type to handle this, such as integrating [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API). All that is required is for us to provide the relevant setter/getter/deleter functions for interfacing with our storage.
+
+Custom storage callbacks run synchronously: the getter must return the stored value directly. Returned promises are not awaited, and promise rejections are not caught by the best-effort handling. An asynchronous backend such as IndexedDB needs a separately managed synchronous cache and its own handling of asynchronous errors.
 
 *One time setup is all that is needed for custom storage...*
 
