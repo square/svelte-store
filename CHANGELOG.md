@@ -1,5 +1,11 @@
 # Changelog #
 
+## 1.0.19 (Unreleased)
+
+- fix: keep persisted stores usable after synchronous storage failures
+- fix: preserve saved data when storage reads fail
+- report caught storage errors through `logAsyncErrors` without blocking recovery
+
 ## 1.0.17 (2023-6-20)
 
 - *BREAKING CHANGE* chore: rearrange dependencies to minimize installed package size
