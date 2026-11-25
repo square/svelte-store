@@ -104,6 +104,45 @@ describe('persisted storage failures', () => {
       }
     );
 
+    it.each([
+      ['load', 'value'],
+      ['load', 'Loadable'],
+      ['resync', 'value'],
+      ['resync', 'Loadable'],
+    ])(
+      'preserves saved data when %s cannot read and uses a %s default',
+      async (operation, initialType) => {
+        const storage = window[property];
+        const saved = JSON.stringify('saved-preference');
+        storage.setItem('preference', saved);
+        const initial =
+          initialType === 'Loadable' ? readable('light') : 'light';
+        const store = persisted(initial, 'preference', { storageType });
+        if (operation === 'resync') {
+          keepSubscribed(store);
+          await store.load();
+        }
+        const read = vi
+          .spyOn(Storage.prototype, 'getItem')
+          .mockImplementation(() => {
+            throw new DOMException('Storage read denied', 'SecurityError');
+          });
+        const write = vi.spyOn(Storage.prototype, 'setItem');
+        if (operation === 'load') {
+          keepSubscribed(store);
+        }
+
+        await expect(store[operation]()).resolves.toBe('light');
+        expect(get(store)).toBe('light');
+        expect(write).not.toHaveBeenCalled();
+
+        read.mockRestore();
+        expect(storage.getItem('preference')).toBe(saved);
+        await expect(store.resync()).resolves.toBe('saved-preference');
+        expect(get(store)).toBe('saved-preference');
+      }
+    );
+
     it('loads a Loadable default when its first write fails', async () => {
       vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
         throw new DOMException('Storage full', 'QuotaExceededError');
@@ -196,7 +235,7 @@ describe('persisted storage failures', () => {
   });
 
   it.each(['LOCAL_STORAGE', 'SESSION_STORAGE', 'COOKIE'] as StorageType[])(
-    'replaces malformed JSON with the initial value in %s',
+    'uses the initial value in memory for malformed JSON in %s',
     async (storageType) => {
       if (storageType === 'COOKIE') {
         cookieStorage.setItem('preference', 'invalid-json');
@@ -212,6 +251,14 @@ describe('persisted storage failures', () => {
 
       await expect(store.load()).resolves.toBe('light');
       expect(get(store)).toBe('light');
+      const raw =
+        storageType === 'COOKIE'
+          ? cookieStorage.getItem('preference')
+          : (storageType === 'LOCAL_STORAGE'
+              ? window.localStorage
+              : window.sessionStorage
+            ).getItem('preference');
+      expect(raw).toBe('invalid-json');
       await store.set('dark');
       await expect(store.resync()).resolves.toBe('dark');
       expect(get(store)).toBe('dark');

@@ -202,7 +202,7 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 
 Sometimes data needs to persist outside the lifecycle of our app. By using persisted stores you can accomplish this while gaining all of the other benefits of Loadable stores. A persisted store synchronizes (stringifiable) store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
 
-Storage is best-effort, including custom storage types. If a read fails or stored JSON is invalid, the store uses the provided initial value. If a write or removal fails, the in-memory change still takes effect. Later operations will try storage again. A failed write or removal can leave an older value in storage, so a later `resync()` or page load may restore it. Consent checks still apply to writes.
+Storage is best-effort, including custom storage types. If a read fails or stored JSON is invalid, the store uses the provided initial value in memory and leaves storage untouched. If a write or removal fails, the in-memory change still takes effect. Later operations will try storage again. A failed write or removal can leave an older value in storage, so a later `resync()` or page load may restore it. Consent checks still apply to writes.
 
 *We can persist a user name across page loads...*
 

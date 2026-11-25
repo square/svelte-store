@@ -119,26 +119,25 @@ export const persisted = <T>(
   const synchronize = async (set: Subscriber<T>): Promise<T> => {
     const storageKey = await getKey();
     let stored: unknown;
+    let readFailed = false;
     try {
       stored = getStorageItem(storageKey);
     } catch {
-      // Treat inaccessible storage or invalid JSON as a missing value.
+      // Preserve potentially valid saved data when the read cannot complete.
+      readFailed = true;
     }
 
     if (stored) {
       set(stored as T);
       return stored as T;
     } else if (initial !== undefined) {
-      if (isLoadable(initial)) {
-        const $initial = await initial.load();
-        await setAndPersist($initial, set);
-
-        return $initial;
+      const initialValue = isLoadable(initial) ? await initial.load() : initial;
+      if (readFailed) {
+        set(initialValue);
       } else {
-        await setAndPersist(initial, set);
-
-        return initial;
+        await setAndPersist(initialValue, set);
       }
+      return initialValue;
     } else {
       set(undefined);
       return undefined;
