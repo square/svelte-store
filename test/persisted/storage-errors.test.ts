@@ -3,6 +3,7 @@ import { CookieStorage } from 'cookie-storage';
 import {
   configureCustomStorageType,
   configurePersistedConsent,
+  logAsyncErrors,
   persisted,
   readable,
   type StorageType,
@@ -23,6 +24,7 @@ describe('persisted storage failures', () => {
     unsubscribe = undefined;
     vi.restoreAllMocks();
     configurePersistedConsent(undefined);
+    logAsyncErrors(undefined);
     window.localStorage.clear();
     window.sessionStorage.clear();
     cookieStorage.removeItem('preference');
@@ -32,6 +34,87 @@ describe('persisted storage failures', () => {
     ['LOCAL_STORAGE' as StorageType, 'localStorage' as const],
     ['SESSION_STORAGE' as StorageType, 'sessionStorage' as const],
   ])('%s', (storageType, property) => {
+    it.each([false, true])(
+      'reports storage errors and recovers when logger throws: %s',
+      async (loggerThrows) => {
+        const logger = vi.fn(() => {
+          if (loggerThrows) {
+            throw new Error('Logger unavailable');
+          }
+        });
+        logAsyncErrors(logger);
+        const readError = new DOMException(
+          'Storage read denied',
+          'SecurityError'
+        );
+        const writeError = new DOMException(
+          'Storage full',
+          'QuotaExceededError'
+        );
+        const removeError = new DOMException(
+          'Storage removal denied',
+          'SecurityError'
+        );
+        const read = vi
+          .spyOn(Storage.prototype, 'getItem')
+          .mockImplementation(() => {
+            throw readError;
+          });
+        const write = vi
+          .spyOn(Storage.prototype, 'setItem')
+          .mockImplementation(() => {
+            throw writeError;
+          });
+        const remove = vi
+          .spyOn(Storage.prototype, 'removeItem')
+          .mockImplementation(() => {
+            throw removeError;
+          });
+        const store = persisted('light', 'preference', { storageType });
+        keepSubscribed(store);
+
+        await expect(store.load()).resolves.toBe('light');
+        read.mockRestore();
+        await store.set('dark');
+        await store.update((value) => `${value}-updated`);
+        expect(get(store)).toBe('dark-updated');
+        await store.clear();
+        expect(get(store)).toBeNull();
+        expect(logger.mock.calls).toEqual([
+          [readError],
+          [writeError],
+          [writeError],
+          [removeError],
+        ]);
+
+        write.mockRestore();
+        remove.mockRestore();
+        await store.set('recovered');
+        expect(window[property].getItem('preference')).toBe(
+          JSON.stringify('recovered')
+        );
+        await store.clear();
+        expect(window[property].getItem('preference')).toBeNull();
+        expect(logger).toHaveBeenCalledTimes(4);
+      }
+    );
+
+    it('reports a failed default write without blocking hydration', async () => {
+      const logger = vi.fn();
+      logAsyncErrors(logger);
+      const error = new DOMException('Storage full', 'QuotaExceededError');
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw error;
+      });
+      const store = persisted(readable('light'), 'preference', { storageType });
+      keepSubscribed(store);
+
+      await expect(store.load()).resolves.toBe('light');
+      expect(get(store)).toBe('light');
+      expect(logger).toHaveBeenCalledTimes(1);
+      expect(logger).toHaveBeenCalledWith(error);
+    });
+
     it('loads the initial value when access to storage is denied', async () => {
       vi.spyOn(window, property, 'get').mockImplementation(() => {
         throw new DOMException('Storage access denied', 'SecurityError');
@@ -237,6 +320,8 @@ describe('persisted storage failures', () => {
   it.each(['LOCAL_STORAGE', 'SESSION_STORAGE', 'COOKIE'] as StorageType[])(
     'uses the initial value in memory for malformed JSON in %s',
     async (storageType) => {
+      const logger = vi.fn();
+      logAsyncErrors(logger);
       if (storageType === 'COOKIE') {
         cookieStorage.setItem('preference', 'invalid-json');
       } else {
@@ -259,6 +344,8 @@ describe('persisted storage failures', () => {
               : window.sessionStorage
             ).getItem('preference');
       expect(raw).toBe('invalid-json');
+      expect(logger).toHaveBeenCalledTimes(1);
+      expect(logger).toHaveBeenCalledWith(expect.any(SyntaxError));
       await store.set('dark');
       await expect(store.resync()).resolves.toBe('dark');
       expect(get(store)).toBe('dark');
@@ -266,8 +353,11 @@ describe('persisted storage failures', () => {
   );
 
   it('treats custom storage operations as best-effort too', async () => {
+    const logger = vi.fn();
+    logAsyncErrors(logger);
+    const error = new Error('Storage unavailable');
     const fail = vi.fn(() => {
-      throw new Error('Storage unavailable');
+      throw error;
     });
     configureCustomStorageType('UNAVAILABLE', {
       getStorageItem: fail,
@@ -285,6 +375,7 @@ describe('persisted storage failures', () => {
     expect(get(store)).toBe('dark-updated');
     await store.clear();
     expect(get(store)).toBeNull();
+    expect(logger.mock.calls).toEqual([[error], [error], [error], [error]]);
   });
 
   it('still rejects invalid storage types', () => {
@@ -294,6 +385,8 @@ describe('persisted storage failures', () => {
   });
 
   it('does not swallow key, consent, updater, or loader errors', async () => {
+    const logger = vi.fn();
+    logAsyncErrors(logger);
     const key = vi.fn(() => Promise.resolve('preference'));
     const initial = readable('light');
     const store = persisted(initial, key);
@@ -323,5 +416,6 @@ describe('persisted storage failures', () => {
     vi.spyOn(initial, 'load').mockRejectedValue(error);
     await expect(store.resync()).rejects.toBe(error);
     expect(get(store)).toBe('light');
+    expect(logger).not.toHaveBeenCalled();
   });
 });

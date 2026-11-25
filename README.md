@@ -204,6 +204,8 @@ Sometimes data needs to persist outside the lifecycle of our app. By using persi
 
 Storage is best-effort for synchronous storage operations, including synchronous custom adapters. If a read fails or stored JSON is invalid, the store uses the provided initial value in memory and leaves storage untouched. If a write or removal fails, the in-memory change still takes effect. Later operations will try storage again. A failed write or removal can leave an older value in storage, so a later `resync()` or page load may restore it. Consent checks still apply to writes.
 
+To observe these storage errors, configure the global `logAsyncErrors(logger)` hook. Each caught storage error is passed to the logger; without one, reporting is a no-op. Synchronous exceptions from the logger are ignored for these storage errors so recovery can continue. There is no per-store error callback.
+
 *We can persist a user name across page loads...*
 
 ```javascript
@@ -403,6 +405,8 @@ The safeLoad function works similarly to loadAll, however any loading errors of 
 ### logAsyncErrors
 
 Using safeLoad or `{#await}{:then}{:catch}` blocks in templates allows you to catch and handle errors that occur during our async stores loading. However this can lead to a visibility problem: if you always catch the errors you may not be aware that your users are experiencing them. To deal with this you can pass an error logger into the `logAsyncErrors` function before you set up your stores. Then any time one of our async stores experiences an error while loading it will automatically call your error logging function regardless of how you handle the error downstream.
+
+Persisted stores also report caught synchronous storage read, write, parsing, and removal errors through this hook while continuing with their best-effort recovery.
 
 ### aborting / rebounce (BETA)
 

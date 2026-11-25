@@ -3,6 +3,7 @@ import { StorageType, type StorageOptions, type Persisted } from './types.js';
 import type { Loadable } from '../async-stores/types.js';
 import { isLoadable, reloadAll } from '../utils/index.js';
 import { writable } from '../standard-stores/index.js';
+import { logError } from '../config.js';
 import {
   getCookie,
   getLocalStorageItem,
@@ -63,6 +64,14 @@ const getStorageFunctions = (type: StorageType | string): StorageFunctions => {
   return storageFunctions;
 };
 
+const reportStorageError = (error: Error): void => {
+  try {
+    logError(error);
+  } catch {
+    // A failing logger must not prevent the intended in-memory update.
+  }
+};
+
 type ConsentChecker = (consentLevel: unknown) => boolean;
 
 let checkConsent: ConsentChecker;
@@ -109,8 +118,9 @@ export const persisted = <T>(
       const storageKey = await getKey();
       try {
         setStorageItem(storageKey, value);
-      } catch {
+      } catch (error) {
         // Keep the store usable even if persistence is unavailable.
+        reportStorageError(error);
       }
     }
     set(value);
@@ -122,9 +132,10 @@ export const persisted = <T>(
     let readFailed = false;
     try {
       stored = getStorageItem(storageKey);
-    } catch {
+    } catch (error) {
       // Preserve potentially valid saved data when the read cannot complete.
       readFailed = true;
+      reportStorageError(error);
     }
 
     if (stored) {
@@ -174,8 +185,9 @@ export const persisted = <T>(
     const storageKey = await getKey();
     try {
       removeStorageItem(storageKey);
-    } catch {
+    } catch (error) {
       // Clearing memory must still work when storage cannot be removed.
+      reportStorageError(error);
     }
     thisStore.set(null);
   };
