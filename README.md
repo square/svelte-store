@@ -202,6 +202,10 @@ Similarly to derived stores, addtional load functionality is bundled with readab
 
 Sometimes data needs to persist outside the lifecycle of our app. By using persisted stores you can accomplish this while gaining all of the other benefits of Loadable stores. A persisted store synchronizes (stringifiable) store data with a sessionStorage item, localStorage item, or cookie. The persisted store loads to the value of the corresponding storage item, if found, otherwise it will load to the provided initial value and persist that value to storage. Any changes to the store will also be persisted!
 
+Storage is best-effort for synchronous storage operations, including synchronous custom adapters. If a read fails or stored JSON is invalid, the store uses the provided initial value in memory and leaves storage untouched. If a write or removal fails, the in-memory change still takes effect. Later operations will try storage again. A failed write or removal can leave an older value in storage, so a later `resync()` or page load may restore it. Consent checks still apply to writes.
+
+To observe these storage errors, configure the global `logAsyncErrors(logger)` hook. Each caught storage error is passed to the logger; without one, reporting is a no-op. Synchronous exceptions from the logger are ignored for these storage errors so recovery can continue. There is no per-store error callback.
+
 *We can persist a user name across page loads...*
 
 ```javascript
@@ -244,6 +248,8 @@ We are also able to wipe stored data by calling `clear()` on the store. The stor
 #### persisted configuration / custom storage
 
 Persisted stores have three built in storage types: LOCAL_STORAGE, SESSION_STORAGE, and COOKIE. These should be sufficient for most use cases, but have the disadvantage of only being able to store JSON serializable data. If more advanced behavior is required we can define a custom storage type to handle this, such as integrating [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API). All that is required is for us to provide the relevant setter/getter/deleter functions for interfacing with our storage.
+
+Custom storage callbacks run synchronously: the getter must return the stored value directly. Returned promises are not awaited, and promise rejections are not caught by the best-effort handling. An asynchronous backend such as IndexedDB needs a separately managed synchronous cache and its own handling of asynchronous errors.
 
 *One time setup is all that is needed for custom storage...*
 
@@ -399,6 +405,8 @@ The safeLoad function works similarly to loadAll, however any loading errors of 
 ### logAsyncErrors
 
 Using safeLoad or `{#await}{:then}{:catch}` blocks in templates allows you to catch and handle errors that occur during our async stores loading. However this can lead to a visibility problem: if you always catch the errors you may not be aware that your users are experiencing them. To deal with this you can pass an error logger into the `logAsyncErrors` function before you set up your stores. Then any time one of our async stores experiences an error while loading it will automatically call your error logging function regardless of how you handle the error downstream.
+
+Persisted stores also report caught synchronous storage read, write, parsing, and removal errors through this hook while continuing with their best-effort recovery.
 
 ### aborting / rebounce (BETA)
 

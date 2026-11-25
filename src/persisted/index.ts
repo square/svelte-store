@@ -3,6 +3,7 @@ import { StorageType, type StorageOptions, type Persisted } from './types.js';
 import type { Loadable } from '../async-stores/types.js';
 import { isLoadable, reloadAll } from '../utils/index.js';
 import { writable } from '../standard-stores/index.js';
+import { logError } from '../config.js';
 import {
   getCookie,
   getLocalStorageItem,
@@ -63,6 +64,14 @@ const getStorageFunctions = (type: StorageType | string): StorageFunctions => {
   return storageFunctions;
 };
 
+const reportStorageError = (error: Error): void => {
+  try {
+    logError(error);
+  } catch {
+    // A failing logger must not prevent the intended in-memory update.
+  }
+};
+
 type ConsentChecker = (consentLevel: unknown) => boolean;
 
 let checkConsent: ConsentChecker;
@@ -78,7 +87,8 @@ export const configurePersistedConsent = (
  * sessionStorage item, or cookie. The store's value will initialize to the value of
  * the corresponding storage item if found, otherwise it will use the provided initial
  * value and persist that value in storage. Any changes to the value of this store will
- * be persisted in storage.
+ * be persisted in storage. Storage is best-effort: unreadable values use the initial
+ * value, and failed writes or removals do not prevent in-memory updates.
  * @param initial The value to initialize to when used when a corresponding storage
  * item is not found. If a Loadable store is provided the store will be loaded and its value
  * used in this case.
@@ -106,29 +116,39 @@ export const persisted = <T>(
     // check consent if checker provided
     if (!checkConsent || checkConsent(consentLevel)) {
       const storageKey = await getKey();
-      setStorageItem(storageKey, value);
+      try {
+        setStorageItem(storageKey, value);
+      } catch (error) {
+        // Keep the store usable even if persistence is unavailable.
+        reportStorageError(error);
+      }
     }
     set(value);
   };
 
   const synchronize = async (set: Subscriber<T>): Promise<T> => {
     const storageKey = await getKey();
-    const stored = getStorageItem(storageKey);
+    let stored: unknown;
+    let readFailed = false;
+    try {
+      stored = getStorageItem(storageKey);
+    } catch (error) {
+      // Preserve potentially valid saved data when the read cannot complete.
+      readFailed = true;
+      reportStorageError(error);
+    }
 
     if (stored) {
       set(stored as T);
       return stored as T;
     } else if (initial !== undefined) {
-      if (isLoadable(initial)) {
-        const $initial = await initial.load();
-        await setAndPersist($initial, set);
-
-        return $initial;
+      const initialValue = isLoadable(initial) ? await initial.load() : initial;
+      if (readFailed) {
+        set(initialValue);
       } else {
-        await setAndPersist(initial, set);
-
-        return initial;
+        await setAndPersist(initialValue, set);
       }
+      return initialValue;
     } else {
       set(undefined);
       return undefined;
@@ -163,7 +183,12 @@ export const persisted = <T>(
 
   const clear = async () => {
     const storageKey = await getKey();
-    removeStorageItem(storageKey);
+    try {
+      removeStorageItem(storageKey);
+    } catch (error) {
+      // Clearing memory must still work when storage cannot be removed.
+      reportStorageError(error);
+    }
     thisStore.set(null);
   };
 
