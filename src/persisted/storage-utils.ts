@@ -4,7 +4,19 @@ const cookieStorage = new CookieStorage();
 
 export const getLocalStorageItem = (key: string): unknown => {
   const item = window.localStorage.getItem(key);
-  return item ? JSON.parse(item) : null;
+  let value
+
+  if (item) {
+    try {
+      value = JSON.parse(item);
+    } catch {
+      value = item
+    }
+  } else {
+    value = null
+  }
+
+  return value;
 };
 
 export const setLocalStorageItem = (key: string, value: unknown): void => {
