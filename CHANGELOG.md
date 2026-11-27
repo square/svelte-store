@@ -2,6 +2,8 @@
 
 ## 1.0.19 (Unreleased)
 
+- support Svelte 5 while retaining Svelte 3 and 4 compatibility
+- fix: provide a working updater to readable and writable start callbacks
 - fix: keep persisted stores usable after synchronous storage failures
 - fix: preserve saved data when storage reads fail
 - report caught storage errors through `logAsyncErrors` without blocking recovery

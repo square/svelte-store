@@ -1,0 +1,33 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Svelte ${{ matrix.svelte }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        svelte: ["3.59.2", "4.2.20", "5.0.0", "5.59.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile
+      - name: Select Svelte version
+        env:
+          SVELTE_VERSION: ${{ matrix.svelte }}
+        run: yarn use-svelte "$SVELTE_VERSION"
+      - run: yarn build
+      - run: yarn lint
+      - run: yarn test --threads false

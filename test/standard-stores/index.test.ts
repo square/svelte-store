@@ -101,6 +101,40 @@ describe('synchronous derived', () => {
 });
 
 describe('readable/writable stores', () => {
+  it.each([readable, writable])(
+    'allows the start notifier to update synchronously',
+    async (createStore) => {
+      const store = createStore(1, (_set, update) => {
+        update((value) => value + 1);
+      });
+
+      await expect(store.load()).resolves.toBe(2);
+    }
+  );
+
+  it.each([readable, writable])(
+    'supports updates from the start notifier and tracks the loaded value',
+    async (createStore) => {
+      const stop = vi.fn();
+      let updateFromStart: (updater: (value: number) => number) => void;
+      const store = createStore<number>(undefined, (_set, update) => {
+        updateFromStart = update;
+        return stop;
+      });
+      const unsubscribe = store.subscribe(vi.fn());
+      const loading = store.load();
+
+      updateFromStart(() => 41);
+      await expect(loading).resolves.toBe(41);
+      updateFromStart((value) => value + 1);
+      await expect(store.load()).resolves.toBe(42);
+      expect(get(store)).toBe(42);
+      expect(stop).not.toHaveBeenCalled();
+      unsubscribe();
+      expect(stop).toHaveBeenCalledTimes(1);
+    }
+  );
+
   describe('writable', () => {
     it('only loads after being set', async () => {
       let isResolved = false;

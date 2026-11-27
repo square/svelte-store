@@ -140,7 +140,15 @@ export const writable = <T>(
     };
     // intercept the `set` function being passed to the provided start function
     // instead provide our own `set` which also updates the load promise.
-    return start(customSet, null);
+    // Svelte 3 types declare only `set`; Svelte 4+ also expose `update`.
+    // A one-argument notifier remains assignable to this shared signature.
+    const notifyStart: (
+      set: Subscriber<T>,
+      update: (updater: Updater<T>) => void
+    ) => Unsubscriber | void = start;
+    // Subscriptions start after the store and its updater are initialized.
+    // eslint-disable-next-line no-use-before-define
+    return notifyStart(customSet, update);
   };
 
   const thisStore = vanillaWritable(value, start && startFunction);
