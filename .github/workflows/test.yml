@@ -24,8 +24,16 @@ jobs:
           cache: yarn
       - run: corepack enable
       - run: yarn install --frozen-lockfile
+      # Older Svelte versions are locked as svelte-<version> aliases; point svelte at one.
       - name: Select Svelte version
-        run: yarn add --dev --exact svelte@${{ matrix.svelte }}
+        env:
+          SVELTE_VERSION: ${{ matrix.svelte }}
+        run: |
+          if [ -d "node_modules/svelte-$SVELTE_VERSION" ]; then
+            rm -rf node_modules/svelte
+            ln -s "svelte-$SVELTE_VERSION" node_modules/svelte
+          fi
+          test "$(node -p "require('./node_modules/svelte/package.json').version")" = "$SVELTE_VERSION"
       - run: yarn build
       - run: yarn lint
       - run: yarn test --threads false
