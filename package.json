@@ -17,6 +17,7 @@
     "lint": "eslint './src/**/*.{js,ts}'",
     "test": "vitest run",
     "test:watch": "yarn test -- --watch",
+    "use-svelte": "node scripts/use-svelte.js",
     "test:browser": "yarn build && vite test/browser --config vitest.config.ts --host 127.0.0.1"
   },
   "devDependencies": {
