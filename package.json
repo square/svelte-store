@@ -16,7 +16,8 @@
     "cleanup": "rm -rf ./lib/",
     "lint": "eslint './src/**/*.{js,ts}'",
     "test": "vitest run",
-    "test:watch": "yarn test -- --watch"
+    "test:watch": "yarn test -- --watch",
+    "test:browser": "yarn build && vite test/browser --config vitest.config.ts --host 127.0.0.1"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^4.31.2",
@@ -24,15 +25,16 @@
     "eslint": "^7.32.0",
     "eslint-plugin-square": "^20.0.2",
     "jsdom": "^22.1.0",
-    "svelte": "^4.1.2",
-    "typescript": "^4.5.5",
-    "vitest": "^0.34.1"
+    "svelte": "^5.59.1",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^0.34.6"
   },
   "dependencies": {
     "cookie-storage": "^6.1.0"
   },
   "peerDependencies": {
-    "svelte": ">= 3.0.0 < 5.0.0"
+    "svelte": ">= 3.0.0 < 6.0.0"
   },
   "license": "ISC",
   "author": "Square",

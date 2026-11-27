@@ -1,16 +1,14 @@
 {
   "compilerOptions": {
-    "types": [
-      "node",
-      "vitest/globals"
-    ],
+    "types": [],
+    "lib": ["ES2020", "DOM"],
     "declaration": true,
     "outDir": "./lib",
     "sourceMap": true,
     "inlineSources": true,
     "target": "ES6",
-    "moduleResolution": "node",
-    "module": "es2022",
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext",
     "strict": false,
   },
   "include": [

@@ -20,6 +20,12 @@ const searchResults = asyncDerived(
 );
 ```
 
+## Svelte compatibility
+
+This package supports Svelte 3, 4 and 5 through the public `svelte/store` API. Existing stores, `$store` subscriptions, input bindings and `{#await}` blocks work in Svelte 5 without migrating the stores to runes. Stores can also be consumed inside components that use runes.
+
+CI builds and tests the package against each supported Svelte major, including component mounting and subscription cleanup. See the [browser compatibility checks](test/browser/README.md) for repeatable manual validation of the built package.
+
 ## The Basics
 
 Square Svelte Store is intended as a replacement for importing from `svelte/store`. It includes all of the features of `svelte/store` while also adding new stores and extending functionality for compatibility between them.
